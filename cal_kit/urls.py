@@ -6,6 +6,9 @@ app_name = "cal_kit"
 
 urlpatterns = [
     path("", views.calendar_view, name="calendar"),
-    path("feed.ics", views.ical_feed_view, name="ical_feed"),
+    path("events.json", views.events_json_view, name="events_json"),
+    path("save/", views.save_event_view, name="save_event"),
+    path("move/<int:pk>/", views.move_event_view, name="move_event"),
     path("delete/<int:pk>/", views.delete_event_view, name="delete_event"),
+    path("feed.ics", views.ical_feed_view, name="ical_feed"),
 ]

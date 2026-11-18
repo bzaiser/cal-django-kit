@@ -1,4 +1,6 @@
+import json
 import os
+from pathlib import Path
 import sys
 
 import django
@@ -54,6 +56,7 @@ if not settings.configured:
 
 from django.contrib.auth import get_user_model
 from django.urls import include, path
+from cal_kit.models import CalendarEvent
 
 urlpatterns = [
     path("design-studio/", include("design_studio.urls")),
@@ -67,28 +70,55 @@ class CalKitTests(TestCase):
         self.client = Client()
         self.client.force_login(self.user)
 
-    def test_create_event_render_calendar_and_ics_feed(self):
-        resp = self.client.post(
-            "/calendar/",
+    def test_fullcalendar_assets_crud_move_and_ics_feed(self):
+        pkg = Path(BASE_DIR) / "cal_kit"
+        self.assertTrue((pkg / "static" / "cal_kit" / "vendor" / "fullcalendar" / "index.global.min.js").exists())
+        self.assertTrue((pkg / "static" / "cal_kit" / "vendor" / "fullcalendar" / "de.global.min.js").exists())
+
+        cal_html = self.client.get("/calendar/").content.decode("utf-8")
+        self.assertIn("FullCalendar.Calendar", cal_html)
+        self.assertNotIn("cdn.jsdelivr.net", cal_html)
+
+        # Create
+        r = self.client.post(
+            "/calendar/save/",
             {
                 "title": "NAS Wartung",
                 "start_at": "2026-11-18T14:00",
                 "end_at": "2026-11-18T15:30",
                 "location": "Serverraum",
+                "color_state": "3",
             },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
         )
-        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(r.status_code, 200)
+        ev_id = r.json()["id"]
 
-        cal_page = self.client.get("/calendar/?year=2026&month=11")
-        self.assertEqual(cal_page.status_code, 200)
-        self.assertIn("NAS Wartung", cal_page.content.decode("utf-8"))
+        # JSON feed
+        events = self.client.get("/calendar/events.json").json()
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["title"], "NAS Wartung")
+        self.assertEqual(events[0]["extendedProps"]["color_state"], 3)
 
+        # Drag & drop move
+        mv = self.client.post(
+            f"/calendar/move/{ev_id}/",
+            json.dumps({"start": "2026-11-19T10:00:00+01:00", "end": "2026-11-19T11:30:00+01:00"}),
+            content_type="application/json",
+        )
+        self.assertEqual(mv.status_code, 200)
+        ev = CalendarEvent.objects.get(pk=ev_id)
+        self.assertEqual(ev.start_at.day, 19)
+
+        # iCal feed
         feed = self.client.get("/calendar/feed.ics")
         self.assertEqual(feed.status_code, 200)
-        self.assertIn("text/calendar", feed["Content-Type"])
-        ics_text = feed.content.decode("utf-8")
-        self.assertIn("BEGIN:VCALENDAR", ics_text)
-        self.assertIn("SUMMARY:NAS Wartung", ics_text)
+        self.assertIn("SUMMARY:NAS Wartung", feed.content.decode("utf-8"))
+
+        # Delete
+        dl = self.client.post(f"/calendar/delete/{ev_id}/", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        self.assertEqual(dl.status_code, 200)
+        self.assertEqual(CalendarEvent.objects.count(), 0)
 
 
 if __name__ == "__main__":

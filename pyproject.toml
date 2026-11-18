@@ -18,4 +18,5 @@ include = ["cal_kit*"]
 [tool.setuptools.package-data]
 cal_kit = [
     "templates/**/*",
+    "static/**/*",
 ]

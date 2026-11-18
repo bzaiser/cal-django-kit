@@ -1,91 +1,284 @@
 {% extends "design_studio/layouts/base.html" %}
-{% load i18n %}
+{% load i18n static %}
 
 {% block title %}{% trans "Kalender" %}{% endblock %}
 
+{% block head_extra %}
+<style>
+    .fc {
+        --fc-border-color: var(--app-table-border-color, rgba(128,128,128,0.22));
+        --fc-page-bg-color: transparent;
+        --fc-neutral-bg-color: color-mix(in srgb, var(--app-primary, #0d6efd) 6%, transparent);
+        --fc-today-bg-color: color-mix(in srgb, var(--app-primary, #0d6efd) 12%, transparent);
+        --fc-button-bg-color: var(--app-primary, #0d6efd);
+        --fc-button-border-color: var(--app-primary, #0d6efd);
+        --fc-button-hover-bg-color: var(--app-primary, #0d6efd);
+        --fc-button-active-bg-color: var(--app-primary, #0d6efd);
+        --fc-event-border-color: transparent;
+    }
+    .fc .fc-button-primary {
+        background: var(--app-gradient) !important;
+        border: none !important;
+        border-radius: 999px !important;
+        padding: 0.35rem 0.85rem;
+        font-size: 0.85rem;
+        font-weight: 600;
+        opacity: 0.82;
+    }
+    .fc .fc-button-primary.fc-button-active,
+    .fc .fc-button-primary:hover {
+        opacity: 1;
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.16);
+    }
+    .fc .fc-toolbar-title {
+        font-size: 1.25rem;
+        font-weight: 700;
+    }
+    .fc .fc-col-header-cell {
+        background: var(--app-table-header-bg, var(--app-primary));
+        color: var(--app-table-header-text, #ffffff);
+        padding: 0.35rem 0;
+    }
+    .fc .fc-col-header-cell-cushion {
+        color: var(--app-table-header-text, #ffffff) !important;
+        text-decoration: none !important;
+    }
+    .fc .fc-daygrid-day-number {
+        color: var(--app-card-color, #1e293b);
+        text-decoration: none !important;
+        font-weight: 600;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-    <div class="d-flex align-items-center gap-2">
-        <a href="?year={{ prev_year }}&month={{ prev_month }}" class="btn btn-sm btn-outline-secondary rounded-pill"><i class="bi bi-chevron-left"></i></a>
-        <h4 class="fw-bold mb-0">{{ month_name }}</h4>
-        <a href="?year={{ next_year }}&month={{ next_month }}" class="btn btn-sm btn-outline-secondary rounded-pill"><i class="bi bi-chevron-right"></i></a>
+    <div>
+        <h3 class="fw-bold mb-0"><i class="bi bi-calendar3 me-2"></i>{% trans "Kalender" %}</h3>
+        <div class="text-muted small">{% trans "Tag, Woche, Monat, Jahr & Liste — Klick legt Termin an, Ziehen verschiebt" %}</div>
     </div>
     <div class="d-flex gap-2">
         <a href="{% url 'cal_kit:ical_feed' %}" class="btn btn-sm btn-outline-primary rounded-pill px-3">
             <i class="bi bi-rss me-1"></i> {% trans ".ics Feed" %}
         </a>
-        <button class="btn btn-sm btn-primary rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#newEventModal" style="background: var(--app-gradient); border: none;">
+        <button type="button" id="calNewBtn" class="btn btn-sm btn-primary rounded-pill px-3" style="background: var(--app-gradient); border: none;">
             <i class="bi bi-plus-lg me-1"></i> {% trans "Neuer Termin" %}
         </button>
     </div>
 </div>
 
-<div class="card shadow-sm mb-4">
-    <div class="table-responsive">
-        <table class="table table-bordered align-top mb-0" style="table-layout: fixed;">
-            <thead>
-                <tr>
-                    <th>Mo</th><th>Di</th><th>Mi</th><th>Do</th><th>Fr</th><th>Sa</th><th>So</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for week in weeks %}
-                <tr>
-                    {% for day, day_events in week %}
-                    <td style="height: 110px; {% if day.month != month %}opacity: 0.45;{% endif %}">
-                        <div class="d-flex justify-content-between small fw-bold mb-1">
-                            <span class="{% if day == today %}badge bg-primary rounded-pill{% endif %}">{{ day.day }}</span>
-                        </div>
-                        {% for ev in day_events %}
-                        <div class="badge d-block text-truncate text-start mb-1 fw-normal" style="background: var(--theme-state-{{ ev.color_state }}, var(--app-primary));">
-                            {{ ev.start_at|date:"H:i" }} {{ ev.title }}
-                        </div>
-                        {% endfor %}
-                    </td>
-                    {% endfor %}
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+<div class="card shadow-sm">
+    <div class="card-body p-3">
+        <div id="dsFullCalendar"></div>
     </div>
 </div>
 
-<div class="modal fade" id="newEventModal" tabindex="-1" aria-hidden="true">
+<!-- Create / Edit / Delete Event Modal -->
+<div class="modal fade" id="calEventModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
-        <form method="post" class="modal-content">
+        <form id="calEventForm" method="post" action="{% url 'cal_kit:save_event' %}" class="modal-content">
             {% csrf_token %}
+            <input type="hidden" name="pk" id="calEvPk" value="">
             <div class="modal-header">
-                <h5 class="modal-title">{% trans "Neuer Termin" %}</h5>
+                <h5 class="modal-title" id="calModalTitle">{% trans "Neuer Termin" %}</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div class="mb-2">
                     <label class="form-label small fw-semibold">{% trans "Titel" %}</label>
-                    <input type="text" name="title" class="form-control" required>
+                    <input type="text" name="title" id="calEvTitle" class="form-control form-control-sm" required>
                 </div>
                 <div class="row g-2 mb-2">
                     <div class="col-6">
                         <label class="form-label small fw-semibold">{% trans "Start" %}</label>
-                        <input type="datetime-local" name="start_at" class="form-control" required>
+                        <input type="datetime-local" name="start_at" id="calEvStart" class="form-control form-control-sm" required>
                     </div>
                     <div class="col-6">
                         <label class="form-label small fw-semibold">{% trans "Ende" %}</label>
-                        <input type="datetime-local" name="end_at" class="form-control">
+                        <input type="datetime-local" name="end_at" id="calEvEnd" class="form-control form-control-sm">
+                    </div>
+                </div>
+                <div class="row g-2 mb-2 align-items-center">
+                    <div class="col-6">
+                        <label class="form-label small fw-semibold">{% trans "Farbe (Design Studio)" %}</label>
+                        <select name="color_state" id="calEvColor" class="form-select form-select-sm">
+                            {% if theme_palette.states %}
+                                {% for st in theme_palette.states %}
+                                <option value="{{ st.index }}">{{ st.name }} ({{ st.hex }})</option>
+                                {% endfor %}
+                            {% else %}
+                                <option value="1">1. OK / Stabil</option>
+                                <option value="2">2. Positiv / Info</option>
+                                <option value="3">3. Mittel / Achtung</option>
+                                <option value="4">4. Warnung</option>
+                                <option value="5">5. Schlecht / Fehler</option>
+                                <option value="6">6. Gefahr / Kritisch</option>
+                                <option value="7">7. Neutral / Inaktiv</option>
+                                <option value="8">8. Fokus / Highlight</option>
+                            {% endif %}
+                        </select>
+                    </div>
+                    <div class="col-6 pt-3">
+                        <div class="form-check">
+                            <input type="checkbox" name="all_day" id="calEvAllDay" class="form-check-input">
+                            <label class="form-check-label small" for="calEvAllDay">{% trans "Ganztägig" %}</label>
+                        </div>
                     </div>
                 </div>
                 <div class="mb-2">
                     <label class="form-label small fw-semibold">{% trans "Ort" %}</label>
-                    <input type="text" name="location" class="form-control">
+                    <input type="text" name="location" id="calEvLocation" class="form-control form-control-sm">
                 </div>
                 <div class="mb-2">
                     <label class="form-label small fw-semibold">{% trans "Beschreibung" %}</label>
-                    <textarea name="description" class="form-control" rows="2"></textarea>
+                    <textarea name="description" id="calEvDesc" class="form-control form-control-sm" rows="2"></textarea>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="submit" class="btn btn-primary rounded-pill px-4" style="background: var(--app-gradient); border: none;">{% trans "Speichern" %}</button>
+            <div class="modal-footer justify-content-between">
+                <button type="button" id="calDeleteBtn" class="btn btn-sm btn-outline-danger rounded-pill px-3 d-none">
+                    <i class="bi bi-trash me-1"></i> {% trans "Löschen" %}
+                </button>
+                <div class="d-flex gap-2 ms-auto">
+                    <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3" data-bs-dismiss="modal">{% trans "Abbrechen" %}</button>
+                    <button type="submit" class="btn btn-sm btn-primary rounded-pill px-4 fw-bold" style="background: var(--app-gradient); border: none;">
+                        {% trans "Speichern" %}
+                    </button>
+                </div>
             </div>
         </form>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'cal_kit/vendor/fullcalendar/index.global.min.js' %}"></script>
+<script src="{% static 'cal_kit/vendor/fullcalendar/de.global.min.js' %}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var calEl = document.getElementById('dsFullCalendar');
+    var modalEl = document.getElementById('calEventModal');
+    var formEl = document.getElementById('calEventForm');
+    var delBtn = document.getElementById('calDeleteBtn');
+    var csrfToken = formEl.querySelector('[name="csrfmiddlewaretoken"]').value;
+
+    function toLocalInput(d) {
+        if (!d) return '';
+        var pad = function (n) { return String(n).padStart(2, '0'); };
+        return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    }
+
+    function openModal(opts) {
+        document.getElementById('calModalTitle').textContent = opts.pk ? 'Termin bearbeiten' : 'Neuer Termin';
+        document.getElementById('calEvPk').value = opts.pk || '';
+        document.getElementById('calEvTitle').value = opts.title || '';
+        document.getElementById('calEvStart').value = opts.start || '';
+        document.getElementById('calEvEnd').value = opts.end || '';
+        document.getElementById('calEvAllDay').checked = !!opts.allDay;
+        document.getElementById('calEvLocation').value = opts.location || '';
+        document.getElementById('calEvDesc').value = opts.description || '';
+        document.getElementById('calEvColor').value = String(opts.color_state || 1);
+        delBtn.classList.toggle('d-none', !opts.pk);
+        if (typeof bootstrap !== 'undefined') bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    }
+
+    var calendar = new FullCalendar.Calendar(calEl, {
+        locale: 'de',
+        initialView: 'dayGridMonth',
+        firstDay: 1,
+        height: 'auto',
+        selectable: true,
+        editable: true,
+        navLinks: true,
+        nowIndicator: true,
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'multiMonthYear,dayGridMonth,timeGridWeek,timeGridDay,listMonth'
+        },
+        buttonText: {
+            today: 'Heute',
+            year: 'Jahr',
+            month: 'Monat',
+            week: 'Woche',
+            day: 'Tag',
+            list: 'Liste'
+        },
+        events: '{% url "cal_kit:events_json" %}',
+        select: function (info) {
+            var s = info.start;
+            var e = info.end || new Date(s.getTime() + 3600000);
+            openModal({ start: toLocalInput(s), end: toLocalInput(e), allDay: info.allDay });
+        },
+        eventClick: function (info) {
+            var ev = info.event;
+            var ext = ev.extendedProps || {};
+            openModal({
+                pk: ev.id,
+                title: ev.title,
+                start: toLocalInput(ev.start),
+                end: toLocalInput(ev.end || ev.start),
+                allDay: ev.allDay,
+                location: ext.location,
+                description: ext.description,
+                color_state: ext.color_state || 1
+            });
+        },
+        eventDrop: function (info) {
+            fetch('/calendar/move/' + info.event.id + '/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                body: JSON.stringify({
+                    start: info.event.start ? info.event.start.toISOString() : null,
+                    end: info.event.end ? info.event.end.toISOString() : null,
+                    allDay: info.event.allDay
+                })
+            });
+        },
+        eventResize: function (info) {
+            fetch('/calendar/move/' + info.event.id + '/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                body: JSON.stringify({
+                    start: info.event.start ? info.event.start.toISOString() : null,
+                    end: info.event.end ? info.event.end.toISOString() : null
+                })
+            });
+        }
+    });
+    calendar.render();
+
+    document.getElementById('calNewBtn').addEventListener('click', function () {
+        var now = new Date();
+        openModal({ start: toLocalInput(now), end: toLocalInput(new Date(now.getTime() + 3600000)) });
+    });
+
+    formEl.addEventListener('submit', function (e) {
+        e.preventDefault();
+        fetch(formEl.action, {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            body: new FormData(formEl)
+        }).then(function (r) {
+            if (r.ok) {
+                if (typeof bootstrap !== 'undefined') bootstrap.Modal.getInstance(modalEl).hide();
+                calendar.refetchEvents();
+            }
+        });
+    });
+
+    delBtn.addEventListener('click', function () {
+        var pk = document.getElementById('calEvPk').value;
+        if (!pk) return;
+        fetch('/calendar/delete/' + pk + '/', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrfToken, 'X-Requested-With': 'XMLHttpRequest' }
+        }).then(function (r) {
+            if (r.ok) {
+                if (typeof bootstrap !== 'undefined') bootstrap.Modal.getInstance(modalEl).hide();
+                calendar.refetchEvents();
+            }
+        });
+    });
+});
+</script>
 {% endblock %}
