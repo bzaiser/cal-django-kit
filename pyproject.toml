@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cal-django-kit"
+version = "1.0.0"
+description = "Reusable Django calendar UI with iCal (.ics) feed and CalDAV sync helper matching django-design-studio."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "Django>=4.2",
+]
+
+[tool.setuptools.packages.find]
+include = ["cal_kit*"]
+
+[tool.setuptools.package-data]
+cal_kit = [
+    "templates/**/*",
+]
