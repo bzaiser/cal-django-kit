@@ -67,6 +67,25 @@
     </div>
 </div>
 
+{% if upcoming_reminders %}
+<div class="card shadow-sm mb-3">
+    <div class="card-header py-2 d-flex justify-content-between align-items-center">
+        <span class="fw-bold small"><i class="bi bi-bell me-1"></i> {% trans "Anstehende Erinnerungen" %}</span>
+        <span class="badge bg-primary rounded-pill">{{ upcoming_reminders|length }}</span>
+    </div>
+    <div class="card-body py-2 px-3">
+        <div class="d-flex flex-wrap gap-2">
+            {% for rem in upcoming_reminders %}
+            <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 rounded-pill px-3 py-2">
+                <i class="bi bi-alarm me-1"></i> {{ rem.title }} · {{ rem.start_at|date:"d.m. H:i" }}
+                {% if rem.reminder_minutes is not None %}({{ rem.reminder_minutes }}m){% endif %}
+            </span>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <div class="card shadow-sm">
     <div class="card-body p-3">
         <div id="dsFullCalendar"></div>
@@ -123,7 +142,22 @@
                             <input type="checkbox" name="all_day" id="calEvAllDay" class="form-check-input">
                             <label class="form-check-label small" for="calEvAllDay">{% trans "Ganztägig" %}</label>
                         </div>
+                        <div class="form-check mt-1">
+                            <input type="checkbox" name="is_reminder" id="calEvIsReminder" class="form-check-input">
+                            <label class="form-check-label small" for="calEvIsReminder"><i class="bi bi-bell me-1"></i>{% trans "Als Erinnerung" %}</label>
+                        </div>
                     </div>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small fw-semibold"><i class="bi bi-alarm me-1"></i>{% trans "Erinnerung" %}</label>
+                    <select name="reminder_minutes" id="calEvReminder" class="form-select form-select-sm">
+                        <option value="">{% trans "Keine Erinnerung" %}</option>
+                        <option value="0">{% trans "Zum Zeitpunkt des Termins" %}</option>
+                        <option value="15">{% trans "15 Minuten vorher" %}</option>
+                        <option value="30">{% trans "30 Minuten vorher" %}</option>
+                        <option value="60">{% trans "1 Stunde vorher" %}</option>
+                        <option value="1440">{% trans "1 Tag vorher" %}</option>
+                    </select>
                 </div>
                 <div class="mb-2">
                     <label class="form-label small fw-semibold">{% trans "Ort" %}</label>
@@ -174,6 +208,8 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('calEvStart').value = opts.start || '';
         document.getElementById('calEvEnd').value = opts.end || '';
         document.getElementById('calEvAllDay').checked = !!opts.allDay;
+        document.getElementById('calEvIsReminder').checked = !!opts.is_reminder;
+        document.getElementById('calEvReminder').value = (opts.reminder_minutes !== null && opts.reminder_minutes !== undefined) ? String(opts.reminder_minutes) : '';
         document.getElementById('calEvLocation').value = opts.location || '';
         document.getElementById('calEvDesc').value = opts.description || '';
         document.getElementById('calEvColor').value = String(opts.color_state || 1);
@@ -221,7 +257,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 allDay: ev.allDay,
                 location: ext.location,
                 description: ext.description,
-                color_state: ext.color_state || 1
+                color_state: ext.color_state || 1,
+                reminder_minutes: ext.reminder_minutes,
+                is_reminder: !!ext.is_reminder
             });
         },
         eventDrop: function (info) {

@@ -38,6 +38,14 @@ def events_to_ics(events, prodid="-//cal-django-kit//DE", cal_name="Kalender") -
             lines.append(f"LOCATION:{_esc(ev.location)}")
         if ev.description:
             lines.append(f"DESCRIPTION:{_esc(ev.description)}")
+        if getattr(ev, "reminder_minutes", None) is not None:
+            lines.extend([
+                "BEGIN:VALARM",
+                "ACTION:DISPLAY",
+                f"DESCRIPTION:{_esc(ev.title)}",
+                f"TRIGGER:-PT{int(ev.reminder_minutes)}M",
+                "END:VALARM",
+            ])
         lines.append("END:VEVENT")
     lines.append("END:VCALENDAR")
     return "\r\n".join(lines) + "\r\n"

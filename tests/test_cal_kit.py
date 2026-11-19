@@ -120,6 +120,33 @@ class CalKitTests(TestCase):
         self.assertEqual(dl.status_code, 200)
         self.assertEqual(CalendarEvent.objects.count(), 0)
 
+    def test_calendar_reminders_valarm_and_command(self):
+        from django.utils import timezone
+        from datetime import timedelta
+
+        now = timezone.localtime(timezone.now())
+        start_str = (now + timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M")
+        end_str = (now + timedelta(minutes=65)).strftime("%Y-%m-%dT%H:%M")
+        r = self.client.post(
+            "/calendar/save/",
+            {
+                "title": "Backup prüfen",
+                "start_at": start_str,
+                "end_at": end_str,
+                "reminder_minutes": "15",
+                "is_reminder": "on",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(r.status_code, 200)
+        feed = self.client.get("/calendar/feed.ics").content.decode("utf-8")
+        self.assertIn("BEGIN:VALARM", feed)
+        self.assertIn("TRIGGER:-PT15M", feed)
+
+        call_command("cal_send_reminders")
+        ev = CalendarEvent.objects.get(title="Backup prüfen")
+        self.assertTrue(ev.reminder_sent)
+
 
 if __name__ == "__main__":
     from django.test.runner import DiscoverRunner

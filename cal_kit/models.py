@@ -18,6 +18,9 @@ class CalendarEvent(models.Model):
     location = models.CharField(max_length=140, blank=True, default="")
     description = models.TextField(blank=True, default="")
     color_state = models.PositiveSmallIntegerField(default=1)
+    reminder_minutes = models.PositiveIntegerField(null=True, blank=True)
+    reminder_sent = models.BooleanField(default=False)
+    is_reminder = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

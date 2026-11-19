@@ -3,6 +3,7 @@ import json
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db.models import Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -27,7 +28,13 @@ def _parse_dt(raw: str, fallback=None):
 
 @login_required
 def calendar_view(request):
-    return render(request, "cal_kit/calendar.html")
+    now = timezone.now()
+    upcoming_reminders = (
+        CalendarEvent.objects.filter(user=request.user, end_at__gte=now)
+        .filter(Q(is_reminder=True) | Q(reminder_minutes__isnull=False))
+        .order_by("start_at")[:6]
+    )
+    return render(request, "cal_kit/calendar.html", {"upcoming_reminders": upcoming_reminders})
 
 
 @login_required
@@ -60,6 +67,8 @@ def events_json_view(request):
                 "location": ev.location,
                 "description": ev.description,
                 "color_state": ev.color_state,
+                "reminder_minutes": ev.reminder_minutes,
+                "is_reminder": ev.is_reminder,
             },
         })
     return JsonResponse(items, safe=False)
@@ -84,6 +93,13 @@ def save_event_view(request):
     ev.start_at = start_dt
     ev.end_at = end_dt
     ev.all_day = bool(request.POST.get("all_day"))
+    ev.is_reminder = bool(request.POST.get("is_reminder"))
+    raw_rem = (request.POST.get("reminder_minutes") or "").strip()
+    if raw_rem.isdigit():
+        ev.reminder_minutes = min(10080, int(raw_rem))
+    else:
+        ev.reminder_minutes = None
+    ev.reminder_sent = False
     ev.location = (request.POST.get("location") or "").strip()[:140]
     ev.description = (request.POST.get("description") or "").strip()
     try:
