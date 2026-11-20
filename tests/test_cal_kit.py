@@ -78,6 +78,8 @@ class CalKitTests(TestCase):
         cal_html = self.client.get("/calendar/").content.decode("utf-8")
         self.assertIn("FullCalendar.Calendar", cal_html)
         self.assertIn("cal-legend", cal_html)
+        self.assertIn("cal-ev-outlook", cal_html)
+        self.assertIn("calEvIconSwatches", cal_html)
         self.assertIn("bi-alarm-fill", cal_html)
         self.assertIn("eventContent", cal_html)
         self.assertNotIn("cdn.jsdelivr.net", cal_html)
@@ -91,6 +93,7 @@ class CalKitTests(TestCase):
                 "end_at": "2026-11-18T15:30",
                 "location": "Serverraum",
                 "color_state": "3",
+                "icon": "bi-people-fill",
             },
             HTTP_X_REQUESTED_WITH="XMLHttpRequest",
         )
@@ -102,6 +105,8 @@ class CalKitTests(TestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0]["title"], "NAS Wartung")
         self.assertEqual(events[0]["extendedProps"]["color_state"], 3)
+        self.assertEqual(events[0]["extendedProps"]["icon"], "bi-people-fill")
+        self.assertTrue(events[0]["extendedProps"]["has_location"])
         self.assertFalse(events[0]["extendedProps"]["is_reminder"])
         self.assertFalse(events[0]["extendedProps"]["all_day"])
         self.assertFalse(events[0]["extendedProps"]["has_alarm"])

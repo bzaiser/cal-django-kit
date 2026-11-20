@@ -69,11 +69,47 @@
         font-size: 0.72rem;
         flex-shrink: 0;
     }
-    .fc-event.cal-ev-reminder {
-        border: 1.5px dashed rgba(255, 255, 255, 0.85) !important;
+    .fc-event.cal-ev-outlook {
+        background: color-mix(in srgb, var(--cal-ev-accent, var(--app-primary, #0d6efd)) 16%, var(--app-card-bg, #ffffff)) !important;
+        border: 1px solid color-mix(in srgb, var(--cal-ev-accent, var(--app-primary, #0d6efd)) 32%, transparent) !important;
+        border-left: 4px solid var(--cal-ev-accent, var(--app-primary, #0d6efd)) !important;
+        color: var(--app-card-color, #1e293b) !important;
+        border-radius: 6px !important;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    }
+    .fc-event.cal-ev-outlook .cal-ev-type-icon {
+        color: var(--cal-ev-accent, var(--app-primary, #0d6efd));
+    }
+    .fc-event.cal-ev-outlook.cal-ev-reminder {
+        border: 1.5px dashed var(--cal-ev-accent, var(--app-primary, #0d6efd)) !important;
+        border-left: 4px solid var(--cal-ev-accent, var(--app-primary, #0d6efd)) !important;
         border-radius: 999px !important;
-        padding-left: 2px;
-        padding-right: 2px;
+        padding-left: 3px;
+        padding-right: 4px;
+    }
+    .cal-ev-badges {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        margin-left: auto;
+        flex-shrink: 0;
+        opacity: 0.85;
+        font-size: 0.72rem;
+    }
+    .cal-icon-btn {
+        border: 1px solid rgba(128, 128, 128, 0.28);
+        background: transparent;
+        border-radius: 8px;
+        padding: 0.25rem 0.45rem;
+        font-size: 0.85rem;
+        line-height: 1;
+        cursor: pointer;
+        color: inherit;
+    }
+    .cal-icon-btn.active {
+        border-color: var(--app-primary, #0d6efd);
+        background: color-mix(in srgb, var(--app-primary, #0d6efd) 16%, transparent);
+        color: var(--app-primary, #0d6efd);
     }
     .cal-legend {
         display: flex;
@@ -132,6 +168,7 @@
             <span class="cal-legend-item"><i class="bi bi-sun text-warning"></i> {% trans "Ganztag" %}</span>
             <span class="cal-legend-item"><i class="bi bi-alarm-fill text-danger"></i> {% trans "Erinnerung" %}</span>
             <span class="cal-legend-item"><i class="bi bi-bell-fill text-info"></i> {% trans "Alarm aktiv" %}</span>
+            <span class="cal-legend-item"><i class="bi bi-geo-alt-fill text-success"></i> {% trans "Ort" %}</span>
         </div>
         <div id="dsFullCalendar"></div>
     </div>
@@ -184,6 +221,21 @@
                             <input type="checkbox" name="is_reminder" id="calEvIsReminder" class="form-check-input">
                             <label class="form-check-label small" for="calEvIsReminder"><i class="bi bi-bell me-1"></i>{% trans "Als Erinnerung" %}</label>
                         </div>
+                    </div>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small fw-semibold d-block">{% trans "Symbol (Outlook-Stil)" %}</label>
+                    <input type="hidden" name="icon" id="calEvIcon" value="">
+                    <div class="d-flex flex-wrap gap-1 align-items-center" id="calEvIconSwatches">
+                        <button type="button" class="cal-icon-btn active" data-icon="" title="{% trans 'Automatisch' %}">Auto</button>
+                        <button type="button" class="cal-icon-btn" data-icon="bi-people-fill" title="{% trans 'Besprechung' %}"><i class="bi bi-people-fill"></i></button>
+                        <button type="button" class="cal-icon-btn" data-icon="bi-camera-video-fill" title="{% trans 'Online-Meeting' %}"><i class="bi bi-camera-video-fill"></i></button>
+                        <button type="button" class="cal-icon-btn" data-icon="bi-telephone-fill" title="{% trans 'Telefonat' %}"><i class="bi bi-telephone-fill"></i></button>
+                        <button type="button" class="cal-icon-btn" data-icon="bi-check2-square" title="{% trans 'Aufgabe' %}"><i class="bi bi-check2-square"></i></button>
+                        <button type="button" class="cal-icon-btn" data-icon="bi-cake2-fill" title="{% trans 'Geburtstag' %}"><i class="bi bi-cake2-fill"></i></button>
+                        <button type="button" class="cal-icon-btn" data-icon="bi-airplane-fill" title="{% trans 'Reise' %}"><i class="bi bi-airplane-fill"></i></button>
+                        <button type="button" class="cal-icon-btn" data-icon="bi-heart-pulse-fill" title="{% trans 'Arzt / Gesundheit' %}"><i class="bi bi-heart-pulse-fill"></i></button>
+                        <button type="button" class="cal-icon-btn" data-icon="bi-star-fill" title="{% trans 'Wichtig' %}"><i class="bi bi-star-fill"></i></button>
                     </div>
                 </div>
                 <div class="mb-2">
@@ -250,6 +302,17 @@ document.addEventListener('DOMContentLoaded', function () {
         b.addEventListener('click', function () { setCalColor(b.dataset.state); });
     });
 
+    function setCalIcon(val) {
+        var s = String(val || '');
+        document.getElementById('calEvIcon').value = s;
+        document.querySelectorAll('#calEvIconSwatches .cal-icon-btn').forEach(function (b) {
+            b.classList.toggle('active', b.dataset.icon === s);
+        });
+    }
+    document.querySelectorAll('#calEvIconSwatches .cal-icon-btn').forEach(function (b) {
+        b.addEventListener('click', function () { setCalIcon(b.dataset.icon); });
+    });
+
     function openModal(opts) {
         document.getElementById('calModalTitle').textContent = opts.pk ? 'Termin bearbeiten' : 'Neuer Termin';
         document.getElementById('calEvPk').value = opts.pk || '';
@@ -262,6 +325,7 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('calEvLocation').value = opts.location || '';
         document.getElementById('calEvDesc').value = opts.description || '';
         setCalColor(opts.color_state || 1);
+        setCalIcon(opts.icon || '');
         delBtn.classList.toggle('d-none', !opts.pk);
         if (typeof bootstrap !== 'undefined') bootstrap.Modal.getOrCreateInstance(modalEl).show();
     }
@@ -292,26 +356,36 @@ document.addEventListener('DOMContentLoaded', function () {
         events: '{% url "cal_kit:events_json" %}',
         eventClassNames: function (arg) {
             var ext = arg.event.extendedProps || {};
-            return ext.is_reminder ? ['cal-ev-reminder'] : [];
+            return ext.is_reminder ? ['cal-ev-outlook', 'cal-ev-reminder'] : ['cal-ev-outlook'];
+        },
+        eventDidMount: function (info) {
+            if (info.event.backgroundColor) {
+                info.el.style.setProperty('--cal-ev-accent', info.event.backgroundColor);
+            }
         },
         eventContent: function (arg) {
             var ext = arg.event.extendedProps || {};
             var isReminder = !!ext.is_reminder;
             var isAllDay = !!ext.all_day || arg.event.allDay;
             var hasAlarm = !!ext.has_alarm;
+            var hasLocation = !!ext.has_location || !!ext.location;
+            var customIcon = ext.icon || '';
 
             var wrap = document.createElement('div');
             wrap.className = 'cal-ev-content';
 
             var typeIcon = document.createElement('i');
-            if (isReminder) {
-                typeIcon.className = 'bi bi-alarm-fill flex-shrink-0';
+            if (customIcon) {
+                typeIcon.className = 'bi ' + customIcon + ' cal-ev-type-icon flex-shrink-0';
+                typeIcon.title = isReminder ? 'Erinnerung' : 'Termin';
+            } else if (isReminder) {
+                typeIcon.className = 'bi bi-alarm-fill cal-ev-type-icon flex-shrink-0';
                 typeIcon.title = 'Erinnerung';
             } else if (isAllDay) {
-                typeIcon.className = 'bi bi-sun flex-shrink-0';
+                typeIcon.className = 'bi bi-sun cal-ev-type-icon flex-shrink-0';
                 typeIcon.title = 'Ganztag';
             } else {
-                typeIcon.className = 'bi bi-calendar-event flex-shrink-0';
+                typeIcon.className = 'bi bi-calendar-event cal-ev-type-icon flex-shrink-0';
                 typeIcon.title = 'Termin';
             }
             wrap.appendChild(typeIcon);
@@ -328,11 +402,24 @@ document.addEventListener('DOMContentLoaded', function () {
             titleEl.textContent = arg.event.title;
             wrap.appendChild(titleEl);
 
-            if (hasAlarm) {
-                var alarmIcon = document.createElement('i');
-                alarmIcon.className = 'bi bi-bell-fill ms-auto flex-shrink-0';
-                alarmIcon.title = 'Vorab-Alarm aktiv';
-                wrap.appendChild(alarmIcon);
+            if (hasAlarm || hasLocation) {
+                var badges = document.createElement('span');
+                badges.className = 'cal-ev-badges';
+                if (hasLocation) {
+                    var locIcon = document.createElement('i');
+                    locIcon.className = 'bi bi-geo-alt-fill';
+                    locIcon.title = ext.location ? ('Ort: ' + ext.location) : 'Ort hinterlegt';
+                    badges.appendChild(locIcon);
+                }
+                if (hasAlarm) {
+                    var alarmIcon = document.createElement('i');
+                    alarmIcon.className = 'bi bi-bell-fill';
+                    alarmIcon.title = (ext.reminder_minutes !== null && ext.reminder_minutes !== undefined)
+                        ? ('Erinnerung: ' + ext.reminder_minutes + ' Min. vorher')
+                        : 'Vorab-Alarm aktiv';
+                    badges.appendChild(alarmIcon);
+                }
+                wrap.appendChild(badges);
             }
             return { domNodes: [wrap] };
         },
@@ -353,6 +440,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 location: ext.location,
                 description: ext.description,
                 color_state: ext.color_state || 1,
+                icon: ext.icon || '',
                 reminder_minutes: ext.reminder_minutes,
                 is_reminder: !!ext.is_reminder
             });

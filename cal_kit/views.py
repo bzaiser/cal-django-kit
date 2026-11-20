@@ -67,10 +67,12 @@ def events_json_view(request):
                 "location": ev.location,
                 "description": ev.description,
                 "color_state": ev.color_state,
+                "icon": ev.icon,
                 "reminder_minutes": ev.reminder_minutes,
                 "is_reminder": ev.is_reminder,
                 "all_day": ev.all_day,
                 "has_alarm": ev.reminder_minutes is not None,
+                "has_location": bool(ev.location),
             },
         })
     return JsonResponse(items, safe=False)
@@ -108,6 +110,8 @@ def save_event_view(request):
         ev.color_state = max(1, min(8, int(request.POST.get("color_state") or 1)))
     except (TypeError, ValueError):
         ev.color_state = 1
+    raw_icon = (request.POST.get("icon") or "").strip()[:40]
+    ev.icon = raw_icon if raw_icon.startswith("bi-") else ""
     ev.save()
 
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
