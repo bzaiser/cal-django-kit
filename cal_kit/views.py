@@ -69,6 +69,8 @@ def events_json_view(request):
                 "color_state": ev.color_state,
                 "reminder_minutes": ev.reminder_minutes,
                 "is_reminder": ev.is_reminder,
+                "all_day": ev.all_day,
+                "has_alarm": ev.reminder_minutes is not None,
             },
         })
     return JsonResponse(items, safe=False)

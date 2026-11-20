@@ -35,6 +35,8 @@ class Command(BaseCommand):
                             title=f"Erinnerung: {ev.title}",
                             message=f"Termin am {timezone.localtime(ev.start_at):%d.%m.%Y %H:%M}" + (f" ({ev.location})" if ev.location else ""),
                             level="info",
+                            link="/calendar/",
+                            topic="cal.reminder",
                         )
                     except Exception:
                         pass

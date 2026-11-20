@@ -48,6 +48,45 @@
         text-decoration: none !important;
         font-weight: 600;
     }
+    .cal-ev-content {
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+        width: 100%;
+        overflow: hidden;
+        padding: 1px 4px;
+        font-size: 0.78rem;
+        line-height: 1.25;
+    }
+    .cal-ev-title {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-weight: 600;
+    }
+    .cal-ev-time {
+        opacity: 0.85;
+        font-size: 0.72rem;
+        flex-shrink: 0;
+    }
+    .fc-event.cal-ev-reminder {
+        border: 1.5px dashed rgba(255, 255, 255, 0.85) !important;
+        border-radius: 999px !important;
+        padding-left: 2px;
+        padding-right: 2px;
+    }
+    .cal-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem 1rem;
+        font-size: 0.8rem;
+        color: var(--app-muted-color, #64748b);
+    }
+    .cal-legend-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+    }
 </style>
 {% endblock %}
 
@@ -88,6 +127,12 @@
 
 <div class="card shadow-sm">
     <div class="card-body p-3">
+        <div class="cal-legend mb-2 pb-2 border-bottom">
+            <span class="cal-legend-item"><i class="bi bi-calendar-event text-primary"></i> {% trans "Termin" %}</span>
+            <span class="cal-legend-item"><i class="bi bi-sun text-warning"></i> {% trans "Ganztag" %}</span>
+            <span class="cal-legend-item"><i class="bi bi-alarm-fill text-danger"></i> {% trans "Erinnerung" %}</span>
+            <span class="cal-legend-item"><i class="bi bi-bell-fill text-info"></i> {% trans "Alarm aktiv" %}</span>
+        </div>
         <div id="dsFullCalendar"></div>
     </div>
 </div>
@@ -245,6 +290,52 @@ document.addEventListener('DOMContentLoaded', function () {
             list: 'Liste'
         },
         events: '{% url "cal_kit:events_json" %}',
+        eventClassNames: function (arg) {
+            var ext = arg.event.extendedProps || {};
+            return ext.is_reminder ? ['cal-ev-reminder'] : [];
+        },
+        eventContent: function (arg) {
+            var ext = arg.event.extendedProps || {};
+            var isReminder = !!ext.is_reminder;
+            var isAllDay = !!ext.all_day || arg.event.allDay;
+            var hasAlarm = !!ext.has_alarm;
+
+            var wrap = document.createElement('div');
+            wrap.className = 'cal-ev-content';
+
+            var typeIcon = document.createElement('i');
+            if (isReminder) {
+                typeIcon.className = 'bi bi-alarm-fill flex-shrink-0';
+                typeIcon.title = 'Erinnerung';
+            } else if (isAllDay) {
+                typeIcon.className = 'bi bi-sun flex-shrink-0';
+                typeIcon.title = 'Ganztag';
+            } else {
+                typeIcon.className = 'bi bi-calendar-event flex-shrink-0';
+                typeIcon.title = 'Termin';
+            }
+            wrap.appendChild(typeIcon);
+
+            if (arg.timeText) {
+                var timeEl = document.createElement('span');
+                timeEl.className = 'cal-ev-time';
+                timeEl.textContent = arg.timeText;
+                wrap.appendChild(timeEl);
+            }
+
+            var titleEl = document.createElement('span');
+            titleEl.className = 'cal-ev-title';
+            titleEl.textContent = arg.event.title;
+            wrap.appendChild(titleEl);
+
+            if (hasAlarm) {
+                var alarmIcon = document.createElement('i');
+                alarmIcon.className = 'bi bi-bell-fill ms-auto flex-shrink-0';
+                alarmIcon.title = 'Vorab-Alarm aktiv';
+                wrap.appendChild(alarmIcon);
+            }
+            return { domNodes: [wrap] };
+        },
         select: function (info) {
             var s = info.start;
             var e = info.end || new Date(s.getTime() + 3600000);
