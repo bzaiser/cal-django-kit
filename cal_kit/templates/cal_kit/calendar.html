@@ -15,6 +15,8 @@
         --fc-button-hover-bg-color: var(--app-primary, #0d6efd);
         --fc-button-active-bg-color: var(--app-primary, #0d6efd);
         --fc-event-border-color: transparent;
+        --fc-event-text-color: var(--app-card-color, var(--bs-body-color, #1e293b));
+        font-family: var(--app-font-body, inherit);
     }
     .fc .fc-button-primary {
         background: var(--app-gradient) !important;
@@ -31,6 +33,7 @@
         box-shadow: 0 3px 10px rgba(0, 0, 0, 0.16);
     }
     .fc .fc-toolbar-title {
+        font-family: var(--app-font-heading, inherit);
         font-size: 1.25rem;
         font-weight: 700;
     }
@@ -62,23 +65,85 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        font-weight: 600;
+        font-weight: 400;
+        min-width: 0;
+        flex: 1 1 auto;
     }
     .cal-ev-time {
         opacity: 0.85;
         font-size: 0.72rem;
+        font-weight: 400;
         flex-shrink: 0;
     }
     .fc-event.cal-ev-outlook {
-        background: color-mix(in srgb, var(--cal-ev-accent, var(--app-primary, #0d6efd)) 16%, var(--app-card-bg, #ffffff)) !important;
+        background: color-mix(in srgb, var(--cal-ev-accent, var(--app-primary, #0d6efd)) 16%, var(--app-card-bg, var(--bs-body-bg, #ffffff))) !important;
         border: 1px solid color-mix(in srgb, var(--cal-ev-accent, var(--app-primary, #0d6efd)) 32%, transparent) !important;
         border-left: 4px solid var(--cal-ev-accent, var(--app-primary, #0d6efd)) !important;
-        color: var(--app-card-color, #1e293b) !important;
+        color: var(--app-card-color, var(--bs-body-color, #1e293b)) !important;
         border-radius: 6px !important;
         box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
     }
+    .fc-event.cal-ev-outlook .fc-event-main,
+    .fc-event.cal-ev-outlook .cal-ev-content,
+    .fc-event.cal-ev-outlook .cal-ev-title,
+    .fc-event.cal-ev-outlook .cal-ev-time,
+    .fc-event.cal-ev-outlook .cal-ev-badges {
+        color: var(--app-card-color, var(--bs-body-color, #1e293b)) !important;
+    }
     .fc-event.cal-ev-outlook .cal-ev-type-icon {
         color: var(--cal-ev-accent, var(--app-primary, #0d6efd));
+    }
+    body[data-card-surface="liquid"] .fc-event.cal-ev-outlook,
+    body[data-card-surface="glass"] .fc-event.cal-ev-outlook {
+        background: color-mix(in srgb, var(--cal-ev-accent, var(--app-primary, #0d6efd)) 18%, color-mix(in srgb, var(--app-card-bg, var(--bs-body-bg, #ffffff)) calc(var(--glass-alpha, 0.72) * 100%), transparent)) !important;
+        backdrop-filter: blur(10px) saturate(140%);
+        -webkit-backdrop-filter: blur(10px) saturate(140%);
+        border-top: 1px solid rgba(255, 255, 255, 0.28) !important;
+        border-right: 1px solid rgba(255, 255, 255, 0.18) !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.16) !important;
+        border-radius: 10px !important;
+    }
+    body[data-card-surface="tinted"] .fc-event.cal-ev-outlook {
+        background: linear-gradient(
+            135deg,
+            color-mix(in srgb, var(--cal-ev-accent, var(--app-primary, #0d6efd)) 24%, color-mix(in srgb, var(--app-card-bg, var(--bs-body-bg, #ffffff)) 82%, transparent)),
+            color-mix(in srgb, var(--cal-ev-accent, var(--app-primary, #0d6efd)) 10%, color-mix(in srgb, var(--app-card-bg, var(--bs-body-bg, #ffffff)) 82%, transparent))
+        ) !important;
+        backdrop-filter: blur(10px) saturate(140%);
+        -webkit-backdrop-filter: blur(10px) saturate(140%);
+    }
+    body[data-card-surface="brutal"] .fc-event.cal-ev-outlook {
+        border-radius: 0 !important;
+        border: 2px solid var(--cal-ev-accent, var(--app-primary, #0d6efd)) !important;
+        box-shadow: 2px 2px 0 var(--cal-ev-accent, var(--app-primary, #0d6efd));
+    }
+    .cal-hover-card {
+        position: fixed;
+        z-index: 1090;
+        max-width: 300px;
+        min-width: 210px;
+        padding: 0.65rem 0.8rem;
+        border-radius: 12px;
+        background: var(--app-card-bg, var(--bs-body-bg, #ffffff));
+        color: var(--app-card-color, var(--bs-body-color, #1e293b));
+        border: 1px solid color-mix(in srgb, var(--app-primary, #0d6efd) 25%, rgba(128, 128, 128, 0.25));
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+        font-family: var(--app-font-body, inherit);
+        font-size: 0.82rem;
+        pointer-events: none;
+        display: none;
+    }
+    body[data-card-surface="liquid"] .cal-hover-card,
+    body[data-card-surface="glass"] .cal-hover-card,
+    body[data-card-surface="tinted"] .cal-hover-card {
+        background: color-mix(in srgb, var(--app-card-bg, var(--bs-body-bg, #ffffff)) 84%, transparent);
+        backdrop-filter: blur(14px) saturate(145%);
+        -webkit-backdrop-filter: blur(14px) saturate(145%);
+    }
+    body[data-card-surface="brutal"] .cal-hover-card {
+        border-radius: 0;
+        border-width: 2px;
+        box-shadow: 4px 4px 0 var(--app-primary, #0d6efd);
     }
     .fc-event.cal-ev-outlook.cal-ev-reminder {
         border: 1.5px dashed var(--cal-ev-accent, var(--app-primary, #0d6efd)) !important;
@@ -173,6 +238,7 @@
         <div id="dsFullCalendar"></div>
     </div>
 </div>
+<div id="calHoverCard" class="cal-hover-card" aria-hidden="true"></div>
 
 <!-- Create / Edit / Delete Event Modal -->
 <div class="modal fade" id="calEventModal" tabindex="-1" aria-hidden="true">
@@ -422,6 +488,51 @@ document.addEventListener('DOMContentLoaded', function () {
                 wrap.appendChild(badges);
             }
             return { domNodes: [wrap] };
+        },
+        eventMouseEnter: function (info) {
+            var card = document.getElementById('calHoverCard');
+            if (!card) return;
+            var ev = info.event;
+            var ext = ev.extendedProps || {};
+            var typeLabel = ext.is_reminder ? 'Erinnerung' : (ev.allDay || ext.all_day ? 'Ganztag' : 'Termin');
+            var iconCls = ext.icon || (ext.is_reminder ? 'bi-alarm-fill' : (ev.allDay || ext.all_day ? 'bi-sun' : 'bi-calendar-event'));
+            var fmtTime = function (d) {
+                if (!d) return '';
+                return d.toLocaleString('de-DE', ev.allDay ? { day: '2-digit', month: '2-digit', year: 'numeric' } : { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+            };
+            var timeStr = fmtTime(ev.start) + (ev.end && !ev.allDay ? (' – ' + fmtTime(ev.end)) : '');
+            var esc = function (s) {
+                var d = document.createElement('div');
+                d.textContent = s || '';
+                return d.innerHTML;
+            };
+            var html = '<div class="d-flex align-items-center gap-2 mb-1">' +
+                '<i class="bi ' + esc(iconCls) + '" style="color:' + esc(ev.backgroundColor || 'var(--app-primary)') + ';"></i>' +
+                '<span class="fw-semibold">' + esc(ev.title) + '</span>' +
+                '<span class="badge bg-secondary bg-opacity-10 text-body ms-auto">' + esc(typeLabel) + '</span>' +
+                '</div>' +
+                '<div class="small opacity-75 mb-1"><i class="bi bi-clock me-1"></i>' + esc(timeStr) + '</div>';
+            if (ext.location) {
+                html += '<div class="small mb-1"><i class="bi bi-geo-alt-fill text-success me-1"></i>' + esc(ext.location) + '</div>';
+            }
+            if (ext.reminder_minutes !== null && ext.reminder_minutes !== undefined) {
+                html += '<div class="small mb-1"><i class="bi bi-bell-fill text-info me-1"></i>Erinnerung: ' + esc(String(ext.reminder_minutes)) + ' Min. vorher</div>';
+            }
+            if (ext.description) {
+                var desc = String(ext.description).slice(0, 140) + (String(ext.description).length > 140 ? '…' : '');
+                html += '<div class="small opacity-75 border-top pt-1 mt-1">' + esc(desc) + '</div>';
+            }
+            card.innerHTML = html;
+            card.style.display = 'block';
+            var rect = info.el.getBoundingClientRect();
+            var top = Math.min(window.innerHeight - card.offsetHeight - 12, rect.bottom + 6);
+            var left = Math.min(window.innerWidth - card.offsetWidth - 12, Math.max(12, rect.left));
+            card.style.top = Math.max(12, top) + 'px';
+            card.style.left = left + 'px';
+        },
+        eventMouseLeave: function () {
+            var card = document.getElementById('calHoverCard');
+            if (card) card.style.display = 'none';
         },
         select: function (info) {
             var s = info.start;
