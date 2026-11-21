@@ -257,6 +257,21 @@
             </button>
             {% endif %}
         </div>
+        <div id="calQuickFilters" class="d-none flex-wrap align-items-center gap-3 small mb-2 pb-2 border-bottom">
+            <span class="fw-semibold text-muted"><i class="bi bi-funnel me-1"></i>{% trans "Filter:" %}</span>
+            <label class="form-check form-check-inline mb-0 d-none" id="calFilterTrackerWrap">
+                <input class="form-check-input" type="checkbox" id="calFilterTracker" checked>
+                <span class="form-check-label"><i class="bi bi-arrow-repeat me-1"></i>{% trans "Routinen" %}</span>
+            </label>
+            <label class="form-check form-check-inline mb-0 d-none" id="calFilterReminderWrap">
+                <input class="form-check-input" type="checkbox" id="calFilterReminder" checked>
+                <span class="form-check-label"><i class="bi bi-alarm me-1"></i>{% trans "Erinnerungen" %}</span>
+            </label>
+            <label class="form-check form-check-inline mb-0 d-none" id="calFilterCompletedWrap">
+                <input class="form-check-input" type="checkbox" id="calFilterCompleted" checked>
+                <span class="form-check-label"><i class="bi bi-check2-circle me-1"></i>{% trans "Erledigte Aufgaben" %}</span>
+            </label>
+        </div>
         <div id="dsFullCalendar"></div>
     </div>
 </div>
@@ -546,13 +561,53 @@ document.addEventListener('DOMContentLoaded', function () {
             list: 'Liste'
         },
         events: function (info, successCb, failureCb) {
-            var url = '{% url "cal_kit:events_json" %}?start=' + info.startStr + '&end=' + info.endStr;
-            if (activeCatFilter) url += '&category=' + activeCatFilter;
-            fetch(url).then(function (r) { return r.json(); }).then(successCb).catch(failureCb);
+            var url = '{% url "cal_kit:events_json" %}?start=' + encodeURIComponent(info.startStr) + '&end=' + encodeURIComponent(info.endStr);
+            if (activeCatFilter) url += '&category=' + encodeURIComponent(activeCatFilter);
+            fetch(url).then(function (r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            }).then(function (data) {
+                var arr = Array.isArray(data) ? data : [];
+                var hasTracker = false, hasReminder = false, hasCompleted = false;
+                arr.forEach(function (ev) {
+                    var ext = ev.extendedProps || {};
+                    if (ext.event_type === 'tracker') hasTracker = true;
+                    if (ext.is_reminder) hasReminder = true;
+                    if (ext.completed) hasCompleted = true;
+                });
+                var bar = document.getElementById('calQuickFilters');
+                var wTr = document.getElementById('calFilterTrackerWrap');
+                var wRm = document.getElementById('calFilterReminderWrap');
+                var wCp = document.getElementById('calFilterCompletedWrap');
+                if (bar) {
+                    var any = hasTracker || hasReminder || hasCompleted;
+                    bar.classList.toggle('d-none', !any);
+                    bar.classList.toggle('d-flex', any);
+                }
+                if (wTr) wTr.classList.toggle('d-none', !hasTracker);
+                if (wRm) wRm.classList.toggle('d-none', !hasReminder);
+                if (wCp) wCp.classList.toggle('d-none', !hasCompleted);
+
+                var showTracker = !document.getElementById('calFilterTracker') || document.getElementById('calFilterTracker').checked;
+                var showReminder = !document.getElementById('calFilterReminder') || document.getElementById('calFilterReminder').checked;
+                var showCompleted = !document.getElementById('calFilterCompleted') || document.getElementById('calFilterCompleted').checked;
+
+                var filtered = arr.filter(function (ev) {
+                    var ext = ev.extendedProps || {};
+                    if (!showCompleted && ext.completed) return false;
+                    if (!showTracker && ext.event_type === 'tracker') return false;
+                    if (!showReminder && ext.is_reminder) return false;
+                    return true;
+                });
+                successCb(filtered);
+            }).catch(failureCb);
         },
         eventClassNames: function (arg) {
             var ext = arg.event.extendedProps || {};
-            return ext.is_reminder ? ['cal-ev-outlook', 'cal-ev-reminder'] : ['cal-ev-outlook'];
+            var cls = ['cal-ev-outlook'];
+            if (ext.is_reminder) cls.push('cal-ev-reminder');
+            if (ext.completed) cls.push('opacity-75');
+            return cls;
         },
         eventDidMount: function (info) {
             if (info.event.backgroundColor) {
@@ -566,26 +621,35 @@ document.addEventListener('DOMContentLoaded', function () {
             var isRecurring = !!ext.is_recurring;
             var hasAlarm = !!ext.has_alarm;
             var hasLocation = !!ext.has_location || !!ext.location;
-            var customIcon = ext.icon || '';
+            var customIcon = String(ext.icon || '').trim();
 
             var wrap = document.createElement('div');
             wrap.className = 'cal-ev-content';
 
-            var typeIcon = document.createElement('i');
-            if (customIcon) {
+            if (customIcon && customIcon.indexOf('bi-') === 0) {
+                var typeIcon = document.createElement('i');
                 typeIcon.className = 'bi ' + customIcon + ' cal-ev-type-icon flex-shrink-0';
                 typeIcon.title = isReminder ? 'Erinnerung' : 'Termin';
-            } else if (isReminder) {
-                typeIcon.className = 'bi bi-alarm-fill cal-ev-type-icon flex-shrink-0';
-                typeIcon.title = 'Erinnerung';
-            } else if (isAllDay) {
-                typeIcon.className = 'bi bi-sun cal-ev-type-icon flex-shrink-0';
-                typeIcon.title = 'Ganztag';
+                wrap.appendChild(typeIcon);
+            } else if (customIcon) {
+                var emojiIcon = document.createElement('span');
+                emojiIcon.className = 'cal-ev-type-icon flex-shrink-0';
+                emojiIcon.textContent = customIcon;
+                wrap.appendChild(emojiIcon);
             } else {
-                typeIcon.className = 'bi bi-calendar-event cal-ev-type-icon flex-shrink-0';
-                typeIcon.title = 'Termin';
+                var fallbackIcon = document.createElement('i');
+                if (isReminder) {
+                    fallbackIcon.className = 'bi bi-alarm-fill cal-ev-type-icon flex-shrink-0';
+                    fallbackIcon.title = 'Erinnerung';
+                } else if (isAllDay) {
+                    fallbackIcon.className = 'bi bi-sun cal-ev-type-icon flex-shrink-0';
+                    fallbackIcon.title = 'Ganztag';
+                } else {
+                    fallbackIcon.className = 'bi bi-calendar-event cal-ev-type-icon flex-shrink-0';
+                    fallbackIcon.title = 'Termin';
+                }
+                wrap.appendChild(fallbackIcon);
             }
-            wrap.appendChild(typeIcon);
 
             if (arg.timeText) {
                 var timeEl = document.createElement('span');
@@ -597,6 +661,10 @@ document.addEventListener('DOMContentLoaded', function () {
             var titleEl = document.createElement('span');
             titleEl.className = 'cal-ev-title';
             titleEl.textContent = arg.event.title;
+            if (ext.completed) {
+                titleEl.style.textDecoration = 'line-through';
+                titleEl.style.opacity = '0.7';
+            }
             wrap.appendChild(titleEl);
 
             if (hasAlarm || hasLocation || isRecurring) {
@@ -632,7 +700,8 @@ document.addEventListener('DOMContentLoaded', function () {
             var ev = info.event;
             var ext = ev.extendedProps || {};
             var typeLabel = ext.is_reminder ? 'Erinnerung' : (ev.allDay || ext.all_day ? 'Ganztag' : 'Termin');
-            var iconCls = ext.icon || (ext.is_reminder ? 'bi-alarm-fill' : (ev.allDay || ext.all_day ? 'bi-sun' : 'bi-calendar-event'));
+            var rawIcon = String(ext.icon || '').trim();
+            var iconCls = (rawIcon && rawIcon.indexOf('bi-') === 0) ? rawIcon : (ext.is_reminder ? 'bi-alarm-fill' : (ev.allDay || ext.all_day ? 'bi-sun' : 'bi-calendar-event'));
             var fmtTime = function (d) {
                 if (!d) return '';
                 return d.toLocaleString('de-DE', ev.allDay ? { day: '2-digit', month: '2-digit', year: 'numeric' } : { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
@@ -644,13 +713,20 @@ document.addEventListener('DOMContentLoaded', function () {
                 return d.innerHTML;
             };
             var repBadge = ext.is_recurring ? '<span class="badge bg-primary bg-opacity-10 text-primary ms-1"><i class="bi bi-arrow-repeat me-1"></i>Serie</span>' : '';
+            var doneBadge = ext.completed ? '<span class="badge bg-success bg-opacity-10 text-success ms-1"><i class="bi bi-check2 me-1"></i>Erledigt</span>' : '';
+            var iconHtml = (rawIcon && rawIcon.indexOf('bi-') !== 0)
+                ? ('<span>' + esc(rawIcon) + '</span>')
+                : ('<i class="bi ' + esc(iconCls) + '" style="color:' + esc(ev.backgroundColor || 'var(--app-primary)') + ';"></i>');
             var html = '<div class="d-flex align-items-center gap-2 mb-1">' +
-                '<i class="bi ' + esc(iconCls) + '" style="color:' + esc(ev.backgroundColor || 'var(--app-primary)') + ';"></i>' +
+                iconHtml +
                 '<span class="fw-semibold">' + esc(ev.title) + '</span>' +
-                repBadge +
+                repBadge + doneBadge +
                 '<span class="badge bg-secondary bg-opacity-10 text-body ms-auto">' + esc(typeLabel) + '</span>' +
                 '</div>' +
                 '<div class="small opacity-75 mb-1"><i class="bi bi-clock me-1"></i>' + esc(timeStr) + '</div>';
+            if (ext.listName) {
+                html += '<div class="small mb-1"><i class="bi bi-card-list text-primary me-1"></i>Liste: ' + esc(ext.listName) + '</div>';
+            }
             if (ext.location) {
                 html += '<div class="small mb-1"><i class="bi bi-geo-alt-fill text-success me-1"></i>' + esc(ext.location) + '</div>';
             }
@@ -682,6 +758,13 @@ document.addEventListener('DOMContentLoaded', function () {
         eventClick: function (info) {
             var ev = info.event;
             var ext = ev.extendedProps || {};
+            if (ext.read_only || ev.url) {
+                if (ev.url) {
+                    info.jsEvent.preventDefault();
+                    window.location.href = ev.url;
+                }
+                return;
+            }
             openModal({
                 pk: ext.master_id || ev.id,
                 occ_id: ev.id,
@@ -704,6 +787,10 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         },
         eventDrop: function (info) {
+            if ((info.event.extendedProps || {}).read_only) {
+                info.revert();
+                return;
+            }
             var isRecurring = !!(info.event.extendedProps || {}).is_recurring;
             var scope = isRecurring ? 'this' : 'all';
             fetch('/calendar/move/' + info.event.id + '/', {
@@ -718,6 +805,10 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         },
         eventResize: function (info) {
+            if ((info.event.extendedProps || {}).read_only) {
+                info.revert();
+                return;
+            }
             var isRecurring = !!(info.event.extendedProps || {}).is_recurring;
             fetch('/calendar/move/' + info.event.id + '/', {
                 method: 'POST',
@@ -731,6 +822,11 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
     calendar.render();
+
+    ['calFilterTracker', 'calFilterReminder', 'calFilterCompleted'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.addEventListener('change', function () { calendar.refetchEvents(); });
+    });
 
     document.getElementById('calNewBtn').addEventListener('click', function () {
         var now = new Date();

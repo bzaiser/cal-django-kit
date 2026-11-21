@@ -257,6 +257,63 @@ class CalKitTests(TestCase):
         self.assertEqual(len(res_no_cat.json()), 0)
 
 
+    def test_events_json_handles_plus_timezone_offset_and_providers(self):
+        from django.test import override_settings
+
+        cal_html = self.client.get("/calendar/").content.decode("utf-8")
+        self.assertIn("encodeURIComponent(info.startStr)", cal_html)
+        self.assertIn("encodeURIComponent(info.endStr)", cal_html)
+
+        self.client.post(
+            "/calendar/save/",
+            {
+                "title": "Berlin Event",
+                "start_at": "2026-11-15T10:00",
+                "end_at": "2026-11-15T11:00",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        # Unencoded '+' in query string becomes space in Django request.GET
+        res_unencoded = self.client.get(
+            "/calendar/events.json?start=2026-10-26T00:00:00+01:00&end=2026-12-07T00:00:00+01:00"
+        )
+        self.assertEqual(res_unencoded.status_code, 200)
+        self.assertEqual(len(res_unencoded.json()), 1)
+
+        # Encoded '%2B' also works
+        res_encoded = self.client.get(
+            "/calendar/events.json?start=2026-10-26T00:00:00%2B01:00&end=2026-12-07T00:00:00%2B01:00"
+        )
+        self.assertEqual(res_encoded.status_code, 200)
+        self.assertEqual(len(res_encoded.json()), 1)
+
+        # External provider included on "Alle", excluded when filtering by a specific CalendarCategory
+        def _fake_provider(request, window_start, window_end):
+            return [{
+                "id": "ext-1",
+                "title": "External Todo",
+                "start": "2026-11-20T12:00:00+01:00",
+                "editable": False,
+                "url": "/list/1/",
+                "extendedProps": {"read_only": True, "completed": False},
+            }]
+
+        with override_settings(CAL_KIT_EVENT_PROVIDERS=[_fake_provider]):
+            all_res = self.client.get(
+                "/calendar/events.json?start=2026-10-26T00:00:00+01:00&end=2026-12-07T00:00:00+01:00"
+            )
+            self.assertEqual(all_res.status_code, 200)
+            titles = [e["title"] for e in all_res.json()]
+            self.assertIn("Berlin Event", titles)
+            self.assertIn("External Todo", titles)
+
+            cat_res = self.client.get(
+                "/calendar/events.json?start=2026-10-26T00:00:00+01:00&end=2026-12-07T00:00:00+01:00&category=99999"
+            )
+            self.assertEqual(cat_res.status_code, 200)
+            self.assertEqual(len(cat_res.json()), 0)
+
     def test_no_missing_migrations(self):
         call_command("makemigrations", "cal_kit", "--check", "--dry-run", verbosity=0)
 

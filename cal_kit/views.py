@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta
 import json
+import logging
+import re
 
 from django.conf import settings
 from django.contrib import messages
@@ -14,14 +16,21 @@ from django.views.decorators.http import require_POST
 from .ical import events_to_ics
 from .models import RECURRENCE_CHOICES, CalendarCategory, CalendarEvent, CalendarEventException
 
+logger = logging.getLogger(__name__)
+
 
 def _parse_dt(raw: str, fallback=None):
     if not raw:
         return fallback
     val = raw.strip().replace("Z", "+00:00")
+    # Unencoded '+' in URL query strings (e.g. +01:00) is decoded as space by Django
+    val = re.sub(r" (\d{2}:\d{2})$", r"+\1", val)
     if len(val) == 10:
         val += "T00:00:00"
-    dt = datetime.fromisoformat(val)
+    try:
+        dt = datetime.fromisoformat(val)
+    except (ValueError, TypeError):
+        return fallback
     if timezone.is_naive(dt):
         dt = timezone.make_aware(dt)
     return dt
@@ -108,21 +117,22 @@ def events_json_view(request):
             occ_id = f"{ev.id}_{occ_start.strftime('%Y%m%d%H%M')}"
             _add_event(ev, occ_start, occ_end, occ_title, occ_id)
 
-    # Invoke configured external event providers (e.g. Buckezz list items)
-    providers = getattr(settings, "CAL_KIT_EVENT_PROVIDERS", [])
-    for prov in providers:
-        try:
-            if isinstance(prov, str):
-                import importlib
-                mod_name, func_name = prov.rsplit(".", 1)
-                prov_fn = getattr(importlib.import_module(mod_name), func_name)
-            else:
-                prov_fn = prov
-            extra = prov_fn(request, window_start, window_end)
-            if extra:
-                items.extend(extra)
-        except Exception:
-            pass
+    # Invoke configured external event providers (e.g. Buckezz list items) when no specific category filter is active
+    if not cat_id:
+        providers = getattr(settings, "CAL_KIT_EVENT_PROVIDERS", [])
+        for prov in providers:
+            try:
+                if isinstance(prov, str):
+                    import importlib
+                    mod_name, func_name = prov.rsplit(".", 1)
+                    prov_fn = getattr(importlib.import_module(mod_name), func_name)
+                else:
+                    prov_fn = prov
+                extra = prov_fn(request, window_start, window_end)
+                if extra:
+                    items.extend(extra)
+            except Exception:
+                logger.exception("CAL_KIT_EVENT_PROVIDERS error in %r", prov)
 
     return JsonResponse(items, safe=False)
 
