@@ -265,6 +265,26 @@
                         <input type="datetime-local" name="end_at" id="calEvEnd" class="form-control form-control-sm">
                     </div>
                 </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-6">
+                        <label class="form-label small fw-semibold"><i class="bi bi-arrow-repeat me-1"></i>{% trans "Wiederholung" %}</label>
+                        <select name="recurrence_rule" id="calEvRecurrenceRule" class="form-select form-select-sm">
+                            <option value="none">{% trans "Keine Wiederholung" %}</option>
+                            <option value="daily">{% trans "Täglich" %}</option>
+                            <option value="weekly">{% trans "Wöchentlich" %}</option>
+                            <option value="monthly">{% trans "Monatlich" %}</option>
+                            <option value="yearly">{% trans "Jährlich" %}</option>
+                        </select>
+                    </div>
+                    <div class="col-3">
+                        <label class="form-label small fw-semibold">{% trans "Intervall" %}</label>
+                        <input type="number" name="recurrence_interval" id="calEvInterval" class="form-control form-control-sm" min="1" max="99" value="1">
+                    </div>
+                    <div class="col-3">
+                        <label class="form-label small fw-semibold">{% trans "Bis Datum" %}</label>
+                        <input type="date" name="recurrence_until" id="calEvUntil" class="form-control form-control-sm">
+                    </div>
+                </div>
                 <div class="row g-2 mb-2 align-items-center">
                     <div class="col-6">
                         <label class="form-label small fw-semibold d-block">{% trans "Farbe (Design Studio)" %}</label>
@@ -388,11 +408,19 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('calEvAllDay').checked = !!opts.allDay;
         document.getElementById('calEvIsReminder').checked = !!opts.is_reminder;
         document.getElementById('calEvReminder').value = (opts.reminder_minutes !== null && opts.reminder_minutes !== undefined) ? String(opts.reminder_minutes) : '';
+        document.getElementById('calEvRecurrenceRule').value = opts.recurrence_rule || 'none';
+        document.getElementById('calEvInterval').value = opts.recurrence_interval || 1;
+        document.getElementById('calEvUntil').value = opts.recurrence_until || '';
         document.getElementById('calEvLocation').value = opts.location || '';
         document.getElementById('calEvDesc').value = opts.description || '';
         setCalColor(opts.color_state || 1);
         setCalIcon(opts.icon || '');
         delBtn.classList.toggle('d-none', !opts.pk);
+        if (opts.is_recurring) {
+            delBtn.innerHTML = '<i class="bi bi-trash me-1"></i> Serie löschen';
+        } else {
+            delBtn.innerHTML = '<i class="bi bi-trash me-1"></i> Löschen';
+        }
         if (typeof bootstrap !== 'undefined') bootstrap.Modal.getOrCreateInstance(modalEl).show();
     }
 
@@ -433,6 +461,7 @@ document.addEventListener('DOMContentLoaded', function () {
             var ext = arg.event.extendedProps || {};
             var isReminder = !!ext.is_reminder;
             var isAllDay = !!ext.all_day || arg.event.allDay;
+            var isRecurring = !!ext.is_recurring;
             var hasAlarm = !!ext.has_alarm;
             var hasLocation = !!ext.has_location || !!ext.location;
             var customIcon = ext.icon || '';
@@ -468,9 +497,15 @@ document.addEventListener('DOMContentLoaded', function () {
             titleEl.textContent = arg.event.title;
             wrap.appendChild(titleEl);
 
-            if (hasAlarm || hasLocation) {
+            if (hasAlarm || hasLocation || isRecurring) {
                 var badges = document.createElement('span');
                 badges.className = 'cal-ev-badges';
+                if (isRecurring) {
+                    var repIcon = document.createElement('i');
+                    repIcon.className = 'bi bi-arrow-repeat';
+                    repIcon.title = 'Serientermin';
+                    badges.appendChild(repIcon);
+                }
                 if (hasLocation) {
                     var locIcon = document.createElement('i');
                     locIcon.className = 'bi bi-geo-alt-fill';
@@ -506,9 +541,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 d.textContent = s || '';
                 return d.innerHTML;
             };
+            var repBadge = ext.is_recurring ? '<span class="badge bg-primary bg-opacity-10 text-primary ms-1"><i class="bi bi-arrow-repeat me-1"></i>Serie</span>' : '';
             var html = '<div class="d-flex align-items-center gap-2 mb-1">' +
                 '<i class="bi ' + esc(iconCls) + '" style="color:' + esc(ev.backgroundColor || 'var(--app-primary)') + ';"></i>' +
                 '<span class="fw-semibold">' + esc(ev.title) + '</span>' +
+                repBadge +
                 '<span class="badge bg-secondary bg-opacity-10 text-body ms-auto">' + esc(typeLabel) + '</span>' +
                 '</div>' +
                 '<div class="small opacity-75 mb-1"><i class="bi bi-clock me-1"></i>' + esc(timeStr) + '</div>';
@@ -532,7 +569,8 @@ document.addEventListener('DOMContentLoaded', function () {
         },
         eventMouseLeave: function () {
             var card = document.getElementById('calHoverCard');
-            if (card) card.style.display = 'none';
+            if (!card) return;
+            card.style.display = 'none';
         },
         select: function (info) {
             var s = info.start;
@@ -543,7 +581,7 @@ document.addEventListener('DOMContentLoaded', function () {
             var ev = info.event;
             var ext = ev.extendedProps || {};
             openModal({
-                pk: ev.id,
+                pk: ext.master_id || ev.id,
                 title: ev.title,
                 start: toLocalInput(ev.start),
                 end: toLocalInput(ev.end || ev.start),
@@ -553,7 +591,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 color_state: ext.color_state || 1,
                 icon: ext.icon || '',
                 reminder_minutes: ext.reminder_minutes,
-                is_reminder: !!ext.is_reminder
+                is_reminder: !!ext.is_reminder,
+                recurrence_rule: ext.recurrence_rule || 'none',
+                recurrence_interval: ext.recurrence_interval || 1,
+                recurrence_until: ext.recurrence_until || '',
+                is_recurring: !!ext.is_recurring
             });
         },
         eventDrop: function (info) {

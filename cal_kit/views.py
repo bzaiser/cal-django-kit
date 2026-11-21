@@ -11,7 +11,7 @@ from django.utils.translation import gettext as _
 from django.views.decorators.http import require_POST
 
 from .ical import events_to_ics
-from .models import CalendarEvent
+from .models import RECURRENCE_CHOICES, CalendarEvent
 
 
 def _parse_dt(raw: str, fallback=None):
@@ -39,31 +39,35 @@ def calendar_view(request):
 
 @login_required
 def events_json_view(request):
-    qs = CalendarEvent.objects.filter(user=request.user)
     start_raw = request.GET.get("start")
     end_raw = request.GET.get("end")
-    if start_raw:
-        try:
-            qs = qs.filter(end_at__gte=_parse_dt(start_raw))
-        except ValueError:
-            pass
-    if end_raw:
-        try:
-            qs = qs.filter(start_at__lte=_parse_dt(end_raw))
-        except ValueError:
-            pass
+    window_start = _parse_dt(start_raw, fallback=timezone.now() - timedelta(days=60))
+    window_end = _parse_dt(end_raw, fallback=timezone.now() + timedelta(days=90))
+
+    non_recurring = CalendarEvent.objects.filter(
+        user=request.user,
+        recurrence_rule="none",
+        end_at__gte=window_start,
+        start_at__lte=window_end,
+    )
+    recurring = CalendarEvent.objects.filter(
+        user=request.user,
+        start_at__lte=window_end,
+    ).exclude(recurrence_rule="none")
 
     items = []
-    for ev in qs:
+
+    def _add_event(ev, occ_start, occ_end, occ_id):
         items.append({
-            "id": str(ev.id),
+            "id": str(occ_id),
             "title": ev.title,
-            "start": timezone.localtime(ev.start_at).isoformat() if timezone.is_aware(ev.start_at) else ev.start_at.isoformat(),
-            "end": timezone.localtime(ev.end_at).isoformat() if timezone.is_aware(ev.end_at) else ev.end_at.isoformat(),
+            "start": timezone.localtime(occ_start).isoformat() if timezone.is_aware(occ_start) else occ_start.isoformat(),
+            "end": timezone.localtime(occ_end).isoformat() if timezone.is_aware(occ_end) else occ_end.isoformat(),
             "allDay": ev.all_day,
             "backgroundColor": f"var(--theme-state-{ev.color_state}, var(--app-primary, #0d6efd))",
             "borderColor": f"var(--theme-state-{ev.color_state}, var(--app-primary, #0d6efd))",
             "extendedProps": {
+                "master_id": str(ev.id),
                 "location": ev.location,
                 "description": ev.description,
                 "color_state": ev.color_state,
@@ -73,8 +77,21 @@ def events_json_view(request):
                 "all_day": ev.all_day,
                 "has_alarm": ev.reminder_minutes is not None,
                 "has_location": bool(ev.location),
+                "is_recurring": ev.is_recurring,
+                "recurrence_rule": ev.recurrence_rule,
+                "recurrence_interval": ev.recurrence_interval,
+                "recurrence_until": ev.recurrence_until.isoformat() if ev.recurrence_until else "",
             },
         })
+
+    for ev in non_recurring:
+        _add_event(ev, ev.start_at, ev.end_at, ev.id)
+
+    for ev in recurring:
+        for occ_start, occ_end in ev.get_occurrences(window_start, window_end):
+            occ_id = f"{ev.id}_{occ_start.strftime('%Y%m%d%H%M')}"
+            _add_event(ev, occ_start, occ_end, occ_id)
+
     return JsonResponse(items, safe=False)
 
 
@@ -82,6 +99,8 @@ def events_json_view(request):
 @require_POST
 def save_event_view(request):
     pk = (request.POST.get("pk") or "").strip()
+    if "_" in pk:
+        pk = pk.split("_")[0]
     ev = get_object_or_404(CalendarEvent, pk=pk, user=request.user) if pk else CalendarEvent(user=request.user)
     title = (request.POST.get("title") or "").strip()[:140]
     start_raw = request.POST.get("start_at", "")
@@ -112,6 +131,22 @@ def save_event_view(request):
         ev.color_state = 1
     raw_icon = (request.POST.get("icon") or "").strip()[:40]
     ev.icon = raw_icon if raw_icon.startswith("bi-") else ""
+
+    rule = (request.POST.get("recurrence_rule") or "none").strip()
+    ev.recurrence_rule = rule if rule in dict(RECURRENCE_CHOICES) else "none"
+    try:
+        ev.recurrence_interval = max(1, min(99, int(request.POST.get("recurrence_interval") or 1)))
+    except (TypeError, ValueError):
+        ev.recurrence_interval = 1
+    until_raw = (request.POST.get("recurrence_until") or "").strip()
+    if until_raw:
+        try:
+            ev.recurrence_until = datetime.fromisoformat(until_raw).date()
+        except Exception:
+            ev.recurrence_until = None
+    else:
+        ev.recurrence_until = None
+
     ev.save()
 
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
@@ -123,7 +158,8 @@ def save_event_view(request):
 @login_required
 @require_POST
 def move_event_view(request, pk):
-    ev = get_object_or_404(CalendarEvent, pk=pk, user=request.user)
+    real_pk = pk.split("_")[0] if "_" in str(pk) else pk
+    ev = get_object_or_404(CalendarEvent, pk=real_pk, user=request.user)
     try:
         payload = json.loads(request.body.decode("utf-8"))
     except Exception:
@@ -144,8 +180,13 @@ def move_event_view(request, pk):
 @login_required
 @require_POST
 def delete_event_view(request, pk):
-    ev = get_object_or_404(CalendarEvent, pk=pk, user=request.user)
+    real_pk = pk.split("_")[0] if "_" in str(pk) else pk
+    ev = get_object_or_404(CalendarEvent, pk=real_pk, user=request.user)
     ev.delete()
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return JsonResponse({"status": "ok"})
+    messages.success(request, _("Termin gelöscht."))
+    return redirect("cal_kit:calendar")
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
         return JsonResponse({"status": "ok"})
     messages.success(request, _("Termin gelöscht."))

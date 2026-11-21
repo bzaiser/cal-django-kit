@@ -86,6 +86,8 @@ class CalKitTests(TestCase):
         self.assertIn("calEvIconSwatches", cal_html)
         self.assertIn("bi-alarm-fill", cal_html)
         self.assertIn("eventContent", cal_html)
+        self.assertIn("calEvRecurrenceRule", cal_html)
+        self.assertIn("bi-arrow-repeat", cal_html)
         self.assertNotIn("cdn.jsdelivr.net", cal_html)
 
         # Create
@@ -165,6 +167,47 @@ class CalKitTests(TestCase):
         events = self.client.get("/calendar/events.json").json()
         self.assertTrue(events[0]["extendedProps"]["is_reminder"])
         self.assertTrue(events[0]["extendedProps"]["has_alarm"])
+
+    def test_recurring_events_occurrences_and_rrule_export(self):
+        # 1. Create a weekly recurring event for 4 weeks
+        r = self.client.post(
+            "/calendar/save/",
+            {
+                "title": "Team Standup",
+                "start_at": "2026-11-02T09:00",
+                "end_at": "2026-11-02T09:30",
+                "recurrence_rule": "weekly",
+                "recurrence_interval": "1",
+                "recurrence_until": "2026-11-25",
+                "color_state": "4",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(r.status_code, 200)
+        ev_id = r.json()["id"]
+        ev = CalendarEvent.objects.get(pk=ev_id)
+        self.assertTrue(ev.is_recurring)
+        self.assertEqual(ev.recurrence_rule, "weekly")
+
+        # 2. Check occurrences via JSON view (November 2026 has Nov 2, 9, 16, 23)
+        res = self.client.get("/calendar/events.json?start=2026-11-01T00:00:00Z&end=2026-11-30T23:59:59Z")
+        self.assertEqual(res.status_code, 200)
+        items = res.json()
+        self.assertEqual(len(items), 4)
+        for it in items:
+            self.assertTrue(it["extendedProps"]["is_recurring"])
+            self.assertEqual(it["extendedProps"]["master_id"], str(ev_id))
+            self.assertEqual(it["extendedProps"]["recurrence_rule"], "weekly")
+
+        # 3. Check iCal RRULE export
+        feed = self.client.get("/calendar/feed.ics").content.decode("utf-8")
+        self.assertIn("RRULE:FREQ=WEEKLY;UNTIL=20261125T", feed)
+
+        # 4. Delete series via occurrence id
+        occ_id = items[1]["id"]
+        dl = self.client.post(f"/calendar/delete/{occ_id}/", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        self.assertEqual(dl.status_code, 200)
+        self.assertEqual(CalendarEvent.objects.filter(title="Team Standup").count(), 0)
 
 
 if __name__ == "__main__":

@@ -38,6 +38,23 @@ def events_to_ics(events, prodid="-//cal-django-kit//DE", cal_name="Kalender") -
             lines.append(f"LOCATION:{_esc(ev.location)}")
         if ev.description:
             lines.append(f"DESCRIPTION:{_esc(ev.description)}")
+        if getattr(ev, "is_recurring", False):
+            freq_map = {
+                "daily": "DAILY",
+                "weekly": "WEEKLY",
+                "monthly": "MONTHLY",
+                "yearly": "YEARLY",
+            }
+            freq = freq_map.get(ev.recurrence_rule)
+            if freq:
+                rrule_parts = [f"FREQ={freq}"]
+                interval = getattr(ev, "recurrence_interval", 1) or 1
+                if interval > 1:
+                    rrule_parts.append(f"INTERVAL={interval}")
+                if getattr(ev, "recurrence_until", None):
+                    until_dt = datetime.combine(ev.recurrence_until, datetime.max.time(), tzinfo=timezone.utc)
+                    rrule_parts.append(f"UNTIL={_fmt_ics_dt(until_dt, False)}")
+                lines.append(f"RRULE:{';'.join(rrule_parts)}")
         if getattr(ev, "reminder_minutes", None) is not None:
             lines.extend([
                 "BEGIN:VALARM",
