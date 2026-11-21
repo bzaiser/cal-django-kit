@@ -303,9 +303,9 @@
                     </div>
                 </div>
                 <div class="mb-2">
-                    <label class="form-label small fw-semibold"><i class="bi bi-arrow-repeat me-1"></i>{% trans "Wiederholung" %}</label>
-                    <div class="row g-2">
-                        <div class="col-6">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-5">
+                            <label class="form-label small fw-semibold"><i class="bi bi-arrow-repeat me-1"></i>{% trans "Wiederholung" %}</label>
                             <select name="recurrence_rule" id="calEvRecurrenceRule" class="form-select form-select-sm">
                                 <option value="none">{% trans "Keine Wiederholung" %}</option>
                                 <option value="daily">{% trans "Täglich" %}</option>
@@ -318,7 +318,7 @@
                             <label class="form-label small fw-semibold">{% trans "Intervall" %}</label>
                             <input type="number" name="recurrence_interval" id="calEvInterval" class="form-control form-control-sm" min="1" max="99" value="1">
                         </div>
-                        <div class="col-3">
+                        <div class="col-4">
                             <label class="form-label small fw-semibold">{% trans "Bis Datum" %}</label>
                             <input type="date" name="recurrence_until" id="calEvUntil" class="form-control form-control-sm">
                         </div>
