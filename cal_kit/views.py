@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 import json
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
@@ -106,6 +107,22 @@ def events_json_view(request):
         for occ_start, occ_end, occ_title in ev.get_occurrences(window_start, window_end):
             occ_id = f"{ev.id}_{occ_start.strftime('%Y%m%d%H%M')}"
             _add_event(ev, occ_start, occ_end, occ_title, occ_id)
+
+    # Invoke configured external event providers (e.g. Buckezz list items)
+    providers = getattr(settings, "CAL_KIT_EVENT_PROVIDERS", [])
+    for prov in providers:
+        try:
+            if isinstance(prov, str):
+                import importlib
+                mod_name, func_name = prov.rsplit(".", 1)
+                prov_fn = getattr(importlib.import_module(mod_name), func_name)
+            else:
+                prov_fn = prov
+            extra = prov_fn(request, window_start, window_end)
+            if extra:
+                items.extend(extra)
+        except Exception:
+            pass
 
     return JsonResponse(items, safe=False)
 
@@ -257,10 +274,45 @@ def delete_event_view(request, pk):
     return redirect("cal_kit:calendar")
 
 
-@login_required
 def ical_feed_view(request):
-    events = CalendarEvent.objects.filter(user=request.user).prefetch_related("exceptions")
+    user = request.user if getattr(request, "user", None) and request.user.is_authenticated else None
+    token = (request.GET.get("token") or "").strip()
+    if not user and token:
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        try:
+            from core.models import Person
+            p = Person.objects.filter(access_token=token).select_related("user").first()
+            if p and p.user:
+                user = p.user
+        except Exception:
+            pass
+        if not user:
+            try:
+                from django.core.signing import TimestampSigner
+                signer = TimestampSigner()
+                user_id = signer.unsign(token, max_age=365 * 86400)
+                user = User.objects.filter(pk=user_id).first()
+            except Exception:
+                pass
+
+    if not user:
+        return HttpResponse("Unauthorized (bitte anmelden oder gültigen Feed-Token angeben)", status=401)
+
+    events = CalendarEvent.objects.filter(user=user).prefetch_related("exceptions")
     ics = events_to_ics(events)
+
+    # Optional: append provider ICS events (e.g. Buckezz list deadlines)
+    try:
+        from core.calendar_provider import get_buckezz_ical_events
+        extra_lines = get_buckezz_ical_events(user)
+        if extra_lines:
+            idx = ics.rfind("END:VCALENDAR")
+            if idx != -1:
+                ics = ics[:idx] + extra_lines + "\r\n" + ics[idx:]
+    except Exception:
+        pass
+
     resp = HttpResponse(ics, content_type="text/calendar; charset=utf-8")
     resp["Content-Disposition"] = 'inline; filename="calendar.ics"'
     return resp
