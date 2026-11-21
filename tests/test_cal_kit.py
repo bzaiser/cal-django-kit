@@ -257,6 +257,10 @@ class CalKitTests(TestCase):
         self.assertEqual(len(res_no_cat.json()), 0)
 
 
+    def test_no_missing_migrations(self):
+        call_command("makemigrations", "cal_kit", "--check", "--dry-run", verbosity=0)
+
+
 if __name__ == "__main__":
     from django.test.runner import DiscoverRunner
     call_command("migrate", verbosity=0)
