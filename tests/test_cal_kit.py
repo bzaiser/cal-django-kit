@@ -256,6 +256,13 @@ class CalKitTests(TestCase):
         res_no_cat = self.client.get("/calendar/events.json?start=2026-11-01T00:00:00Z&end=2026-11-30T23:59:59Z&category=99999")
         self.assertEqual(len(res_no_cat.json()), 0)
 
+        # Categories management modal rendered & wired
+        cal_html = self.client.get("/calendar/").content.decode("utf-8")
+        self.assertIn('id="calCategoriesModal"', cal_html)
+        self.assertIn('id="calCatForm"', cal_html)
+        self.assertIn("cal-cat-edit-btn", cal_html)
+        self.assertIn("cal-cat-del-btn", cal_html)
+
 
     def test_events_json_handles_plus_timezone_offset_and_providers(self):
         from django.test import override_settings

@@ -421,6 +421,76 @@
         </form>
     </div>
 </div>
+
+<!-- Manage Categories Modal -->
+<div class="modal fade" id="calCategoriesModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-tags me-2"></i>{% trans "Kalender-Kategorien" %}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                {% if categories %}
+                <div class="list-group list-group-flush mb-3 border rounded" id="calCatList">
+                    {% for cat in categories %}
+                    <div class="list-group-item d-flex align-items-center justify-content-between gap-2 py-2">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="rounded-circle d-inline-block" style="width:12px;height:12px;background:var(--theme-state-{{ cat.color_state }}, var(--app-primary, #0d6efd));"></span>
+                            {% if cat.icon %}<i class="bi {{ cat.icon }}"></i>{% endif %}
+                            <span class="fw-semibold small">{{ cat.name }}</span>
+                        </div>
+                        <div class="d-flex gap-1">
+                            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 cal-cat-edit-btn" data-id="{{ cat.id }}" data-name="{{ cat.name }}" data-color="{{ cat.color_state }}" data-icon="{{ cat.icon }}" title="{% trans 'Bearbeiten' %}"><i class="bi bi-pencil"></i></button>
+                            <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2 cal-cat-del-btn" data-url="{% url 'cal_kit:delete_category' cat.id %}" data-name="{{ cat.name }}" title="{% trans 'Löschen' %}"><i class="bi bi-trash"></i></button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted small mb-3">{% trans "Noch keine Kategorien angelegt. Erstelle deine erste Kategorie für Termine:" %}</p>
+                {% endif %}
+
+                <form id="calCatForm" method="post" action="{% url 'cal_kit:save_category' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="pk" id="calCatPk" value="">
+                    <div class="mb-2">
+                        <label class="form-label small fw-semibold" id="calCatFormLabel">{% trans "Neue Kategorie" %}</label>
+                        <input type="text" name="name" id="calCatName" class="form-control form-control-sm" placeholder="{% trans 'z.B. Arbeit, Privat, Familie' %}" maxlength="80" required>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-semibold d-block">{% trans "Farbe" %}</label>
+                        <input type="hidden" name="color_state" id="calCatColor" value="1">
+                        <div class="d-flex flex-wrap gap-2 align-items-center" id="calCatColorSwatches">
+                            {% for i in "12345678" %}
+                            <button type="button" class="ds-color-swatch-btn {% if forloop.first %}active{% endif %}" data-state="{{ i }}" style="background: var(--theme-state-{{ i }}, var(--app-primary, #0d6efd));" title="Farbe {{ i }}"></button>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold d-block">{% trans "Symbol" %}</label>
+                        <input type="hidden" name="icon" id="calCatIcon" value="">
+                        <div class="d-flex flex-wrap gap-1 align-items-center" id="calCatIconSwatches">
+                            <button type="button" class="cal-icon-btn active" data-icon="" title="{% trans 'Kein Symbol' %}">–</button>
+                            <button type="button" class="cal-icon-btn" data-icon="bi-briefcase-fill" title="{% trans 'Arbeit' %}"><i class="bi bi-briefcase-fill"></i></button>
+                            <button type="button" class="cal-icon-btn" data-icon="bi-house-fill" title="{% trans 'Privat / Zuhause' %}"><i class="bi bi-house-fill"></i></button>
+                            <button type="button" class="cal-icon-btn" data-icon="bi-people-fill" title="{% trans 'Familie / Team' %}"><i class="bi bi-people-fill"></i></button>
+                            <button type="button" class="cal-icon-btn" data-icon="bi-heart-pulse-fill" title="{% trans 'Gesundheit' %}"><i class="bi bi-heart-pulse-fill"></i></button>
+                            <button type="button" class="cal-icon-btn" data-icon="bi-airplane-fill" title="{% trans 'Reise / Urlaub' %}"><i class="bi bi-airplane-fill"></i></button>
+                            <button type="button" class="cal-icon-btn" data-icon="bi-cake2-fill" title="{% trans 'Geburtstag' %}"><i class="bi bi-cake2-fill"></i></button>
+                            <button type="button" class="cal-icon-btn" data-icon="bi-check2-square" title="{% trans 'Aufgaben' %}"><i class="bi bi-check2-square"></i></button>
+                            <button type="button" class="cal-icon-btn" data-icon="bi-star-fill" title="{% trans 'Wichtig' %}"><i class="bi bi-star-fill"></i></button>
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-end gap-2">
+                        <button type="button" id="calCatResetBtn" class="btn btn-sm btn-outline-secondary rounded-pill px-3 d-none">{% trans "Abbrechen" %}</button>
+                        <button type="submit" class="btn btn-sm btn-primary rounded-pill px-4 fw-bold"><i class="bi bi-check-lg me-1"></i>{% trans "Speichern" %}</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -885,6 +955,88 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         }
     });
+
+    // ── Categories Modal ──────────────────────────────────────────────
+    var catModalEl = document.getElementById('calCategoriesModal');
+    var catFormEl = document.getElementById('calCatForm');
+    var manageCatsBtn = document.getElementById('calManageCatsBtn');
+
+    function setCatColor(val) {
+        var s = String(val || 1);
+        var inp = document.getElementById('calCatColor');
+        if (inp) inp.value = s;
+        document.querySelectorAll('#calCatColorSwatches .ds-color-swatch-btn').forEach(function (b) {
+            b.classList.toggle('active', b.dataset.state === s);
+        });
+    }
+    function setCatIcon(val) {
+        var s = String(val || '');
+        var inp = document.getElementById('calCatIcon');
+        if (inp) inp.value = s;
+        document.querySelectorAll('#calCatIconSwatches .cal-icon-btn').forEach(function (b) {
+            b.classList.toggle('active', b.dataset.icon === s);
+        });
+    }
+    function resetCatForm() {
+        if (!catFormEl) return;
+        document.getElementById('calCatPk').value = '';
+        document.getElementById('calCatName').value = '';
+        document.getElementById('calCatFormLabel').textContent = 'Neue Kategorie';
+        document.getElementById('calCatResetBtn').classList.add('d-none');
+        setCatColor(1);
+        setCatIcon('');
+    }
+
+    document.querySelectorAll('#calCatColorSwatches .ds-color-swatch-btn').forEach(function (b) {
+        b.addEventListener('click', function () { setCatColor(b.dataset.state); });
+    });
+    document.querySelectorAll('#calCatIconSwatches .cal-icon-btn').forEach(function (b) {
+        b.addEventListener('click', function () { setCatIcon(b.dataset.icon); });
+    });
+    if (document.getElementById('calCatResetBtn')) {
+        document.getElementById('calCatResetBtn').addEventListener('click', resetCatForm);
+    }
+    if (manageCatsBtn && catModalEl) {
+        manageCatsBtn.addEventListener('click', function () {
+            resetCatForm();
+            if (typeof bootstrap !== 'undefined') bootstrap.Modal.getOrCreateInstance(catModalEl).show();
+        });
+    }
+    document.querySelectorAll('.cal-cat-edit-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            document.getElementById('calCatPk').value = btn.dataset.id || '';
+            document.getElementById('calCatName').value = btn.dataset.name || '';
+            document.getElementById('calCatFormLabel').textContent = 'Kategorie bearbeiten';
+            document.getElementById('calCatResetBtn').classList.remove('d-none');
+            setCatColor(btn.dataset.color || 1);
+            setCatIcon(btn.dataset.icon || '');
+            document.getElementById('calCatName').focus();
+        });
+    });
+    document.querySelectorAll('.cal-cat-del-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var name = btn.dataset.name || '';
+            if (!confirm('Kategorie "' + name + '" wirklich löschen?')) return;
+            fetch(btn.dataset.url, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken, 'X-Requested-With': 'XMLHttpRequest' }
+            }).then(function (r) {
+                if (r.ok) window.location.reload();
+            });
+        });
+    });
+    if (catFormEl) {
+        catFormEl.addEventListener('submit', function (e) {
+            e.preventDefault();
+            fetch(catFormEl.action, {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                body: new FormData(catFormEl)
+            }).then(function (r) {
+                if (r.ok) window.location.reload();
+            });
+        });
+    }
 });
 </script>
 {% endblock %}
