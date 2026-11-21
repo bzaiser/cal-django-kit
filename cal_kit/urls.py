@@ -11,4 +11,6 @@ urlpatterns = [
     path("move/<str:pk>/", views.move_event_view, name="move_event"),
     path("delete/<str:pk>/", views.delete_event_view, name="delete_event"),
     path("feed.ics", views.ical_feed_view, name="ical_feed"),
+    path("categories/save/", views.save_category_view, name="save_category"),
+    path("categories/<int:pk>/delete/", views.delete_category_view, name="delete_category"),
 ]

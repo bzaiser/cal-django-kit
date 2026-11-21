@@ -228,12 +228,34 @@
 
 <div class="card shadow-sm">
     <div class="card-body p-3">
-        <div class="cal-legend mb-2 pb-2 border-bottom">
-            <span class="cal-legend-item"><i class="bi bi-calendar-event text-primary"></i> {% trans "Termin" %}</span>
-            <span class="cal-legend-item"><i class="bi bi-sun text-warning"></i> {% trans "Ganztag" %}</span>
-            <span class="cal-legend-item"><i class="bi bi-alarm-fill text-danger"></i> {% trans "Erinnerung" %}</span>
-            <span class="cal-legend-item"><i class="bi bi-bell-fill text-info"></i> {% trans "Alarm aktiv" %}</span>
-            <span class="cal-legend-item"><i class="bi bi-geo-alt-fill text-success"></i> {% trans "Ort" %}</span>
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2 pb-2 border-bottom">
+            <div class="cal-legend">
+                <span class="cal-legend-item"><i class="bi bi-calendar-event text-primary"></i> {% trans "Termin" %}</span>
+                <span class="cal-legend-item"><i class="bi bi-sun text-warning"></i> {% trans "Ganztag" %}</span>
+                <span class="cal-legend-item"><i class="bi bi-alarm-fill text-danger"></i> {% trans "Erinnerung" %}</span>
+                <span class="cal-legend-item"><i class="bi bi-bell-fill text-info"></i> {% trans "Alarm aktiv" %}</span>
+                <span class="cal-legend-item"><i class="bi bi-geo-alt-fill text-success"></i> {% trans "Ort" %}</span>
+            </div>
+            {% if categories %}
+            <div class="d-flex flex-wrap gap-1 align-items-center" id="calCategoryFilter">
+                <button type="button" class="btn btn-sm rounded-pill px-3 btn-primary cal-cat-chip active" data-cat="">{% trans "Alle" %}</button>
+                {% for cat in categories %}
+                <button type="button" class="btn btn-sm rounded-pill px-3 btn-outline-secondary cal-cat-chip"
+                        data-cat="{{ cat.id }}"
+                        style="--cat-color: var(--theme-state-{{ cat.color_state }}, var(--app-primary));"
+                        title="{{ cat.name }}">
+                    {% if cat.icon %}<i class="bi {{ cat.icon }} me-1"></i>{% endif %}{{ cat.name }}
+                </button>
+                {% endfor %}
+                <button type="button" class="btn btn-sm btn-link p-0 ms-1 text-muted" id="calManageCatsBtn" title="{% trans 'Kategorien verwalten' %}">
+                    <i class="bi bi-gear-fill"></i>
+                </button>
+            </div>
+            {% else %}
+            <button type="button" class="btn btn-sm btn-link p-0 text-muted" id="calManageCatsBtn">
+                <i class="bi bi-tags me-1"></i>{% trans "Kategorien anlegen" %}
+            </button>
+            {% endif %}
         </div>
         <div id="dsFullCalendar"></div>
     </div>
@@ -265,24 +287,39 @@
                         <input type="datetime-local" name="end_at" id="calEvEnd" class="form-control form-control-sm">
                     </div>
                 </div>
-                <div class="row g-2 mb-2">
-                    <div class="col-6">
-                        <label class="form-label small fw-semibold"><i class="bi bi-arrow-repeat me-1"></i>{% trans "Wiederholung" %}</label>
-                        <select name="recurrence_rule" id="calEvRecurrenceRule" class="form-select form-select-sm">
-                            <option value="none">{% trans "Keine Wiederholung" %}</option>
-                            <option value="daily">{% trans "Täglich" %}</option>
-                            <option value="weekly">{% trans "Wöchentlich" %}</option>
-                            <option value="monthly">{% trans "Monatlich" %}</option>
-                            <option value="yearly">{% trans "Jährlich" %}</option>
-                        </select>
+                <div class="mb-2">
+                    <label class="form-label small fw-semibold"><i class="bi bi-arrow-repeat me-1"></i>{% trans "Wiederholung" %}</label>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <select name="recurrence_rule" id="calEvRecurrenceRule" class="form-select form-select-sm">
+                                <option value="none">{% trans "Keine Wiederholung" %}</option>
+                                <option value="daily">{% trans "Täglich" %}</option>
+                                <option value="weekly">{% trans "Wöchentlich" %}</option>
+                                <option value="monthly">{% trans "Monatlich" %}</option>
+                                <option value="yearly">{% trans "Jährlich" %}</option>
+                            </select>
+                        </div>
+                        <div class="col-3">
+                            <label class="form-label small fw-semibold">{% trans "Intervall" %}</label>
+                            <input type="number" name="recurrence_interval" id="calEvInterval" class="form-control form-control-sm" min="1" max="99" value="1">
+                        </div>
+                        <div class="col-3">
+                            <label class="form-label small fw-semibold">{% trans "Bis Datum" %}</label>
+                            <input type="date" name="recurrence_until" id="calEvUntil" class="form-control form-control-sm">
+                        </div>
                     </div>
-                    <div class="col-3">
-                        <label class="form-label small fw-semibold">{% trans "Intervall" %}</label>
-                        <input type="number" name="recurrence_interval" id="calEvInterval" class="form-control form-control-sm" min="1" max="99" value="1">
-                    </div>
-                    <div class="col-3">
-                        <label class="form-label small fw-semibold">{% trans "Bis Datum" %}</label>
-                        <input type="date" name="recurrence_until" id="calEvUntil" class="form-control form-control-sm">
+                    <div id="calEvWeekdaysRow" class="mt-2 d-none">
+                        <label class="form-label small fw-semibold">{% trans "Wochentage" %}</label>
+                        <div class="d-flex flex-wrap gap-1">
+                            <input type="hidden" name="recurrence_weekdays" id="calEvWeekdays" value="">
+                            <button type="button" class="cal-icon-btn cal-wd-btn" data-wd="0">Mo</button>
+                            <button type="button" class="cal-icon-btn cal-wd-btn" data-wd="1">Di</button>
+                            <button type="button" class="cal-icon-btn cal-wd-btn" data-wd="2">Mi</button>
+                            <button type="button" class="cal-icon-btn cal-wd-btn" data-wd="3">Do</button>
+                            <button type="button" class="cal-icon-btn cal-wd-btn" data-wd="4">Fr</button>
+                            <button type="button" class="cal-icon-btn cal-wd-btn" data-wd="5">Sa</button>
+                            <button type="button" class="cal-icon-btn cal-wd-btn" data-wd="6">So</button>
+                        </div>
                     </div>
                 </div>
                 <div class="row g-2 mb-2 align-items-center">
@@ -343,6 +380,17 @@
                     <label class="form-label small fw-semibold">{% trans "Beschreibung" %}</label>
                     <textarea name="description" id="calEvDesc" class="form-control form-control-sm" rows="2"></textarea>
                 </div>
+                {% if categories %}
+                <div class="mb-2">
+                    <label class="form-label small fw-semibold"><i class="bi bi-tags me-1"></i>{% trans "Kategorie" %}</label>
+                    <select name="category" id="calEvCategory" class="form-select form-select-sm">
+                        <option value="">{% trans "Keine Kategorie" %}</option>
+                        {% for cat in categories %}
+                        <option value="{{ cat.id }}">{{ cat.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
             </div>
             <div class="modal-footer justify-content-between">
                 <button type="button" id="calDeleteBtn" class="btn btn-sm btn-outline-danger rounded-pill px-3 d-none">
@@ -399,6 +447,48 @@ document.addEventListener('DOMContentLoaded', function () {
         b.addEventListener('click', function () { setCalIcon(b.dataset.icon); });
     });
 
+    // ── Weekdays (BYDAY) ──────────────────────────────────────────────
+    function updateWeekdaysInput() {
+        var active = [];
+        document.querySelectorAll('.cal-wd-btn.active').forEach(function (b) { active.push(b.dataset.wd); });
+        var el = document.getElementById('calEvWeekdays');
+        if (el) el.value = active.join(',');
+    }
+    document.querySelectorAll('.cal-wd-btn').forEach(function (b) {
+        b.addEventListener('click', function () {
+            b.classList.toggle('active');
+            updateWeekdaysInput();
+        });
+    });
+    function setWeekdays(val) {
+        var active = (val || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+        document.querySelectorAll('.cal-wd-btn').forEach(function (b) {
+            b.classList.toggle('active', active.indexOf(b.dataset.wd) !== -1);
+        });
+        updateWeekdaysInput();
+    }
+    function toggleWeekdayRow(rule) {
+        var row = document.getElementById('calEvWeekdaysRow');
+        if (row) row.classList.toggle('d-none', rule !== 'weekly');
+    }
+    document.getElementById('calEvRecurrenceRule').addEventListener('change', function () {
+        toggleWeekdayRow(this.value);
+    });
+
+    // ── Category filter chips ─────────────────────────────────────────
+    var activeCatFilter = '';
+    document.querySelectorAll('.cal-cat-chip').forEach(function (chip) {
+        chip.addEventListener('click', function () {
+            activeCatFilter = chip.dataset.cat || '';
+            document.querySelectorAll('.cal-cat-chip').forEach(function (c) {
+                c.classList.toggle('active', c === chip);
+                c.classList.toggle('btn-primary', c === chip);
+                c.classList.toggle('btn-outline-secondary', c !== chip);
+            });
+            if (typeof calendar !== 'undefined') calendar.refetchEvents();
+        });
+    });
+
     function openModal(opts) {
         document.getElementById('calModalTitle').textContent = opts.pk ? 'Termin bearbeiten' : 'Neuer Termin';
         document.getElementById('calEvPk').value = opts.pk || '';
@@ -408,16 +498,24 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('calEvAllDay').checked = !!opts.allDay;
         document.getElementById('calEvIsReminder').checked = !!opts.is_reminder;
         document.getElementById('calEvReminder').value = (opts.reminder_minutes !== null && opts.reminder_minutes !== undefined) ? String(opts.reminder_minutes) : '';
-        document.getElementById('calEvRecurrenceRule').value = opts.recurrence_rule || 'none';
+        var rule = opts.recurrence_rule || 'none';
+        document.getElementById('calEvRecurrenceRule').value = rule;
         document.getElementById('calEvInterval').value = opts.recurrence_interval || 1;
         document.getElementById('calEvUntil').value = opts.recurrence_until || '';
+        toggleWeekdayRow(rule);
+        setWeekdays(opts.recurrence_weekdays || '');
         document.getElementById('calEvLocation').value = opts.location || '';
         document.getElementById('calEvDesc').value = opts.description || '';
+        var catEl = document.getElementById('calEvCategory');
+        if (catEl) catEl.value = opts.category_id ? String(opts.category_id) : '';
         setCalColor(opts.color_state || 1);
         setCalIcon(opts.icon || '');
+        // Store occurrence id for scope decisions
+        formEl.dataset.occId = opts.occ_id || '';
+        formEl.dataset.isRecurring = opts.is_recurring ? '1' : '';
         delBtn.classList.toggle('d-none', !opts.pk);
         if (opts.is_recurring) {
-            delBtn.innerHTML = '<i class="bi bi-trash me-1"></i> Serie löschen';
+            delBtn.innerHTML = '<i class="bi bi-trash me-1"></i> Termin löschen…';
         } else {
             delBtn.innerHTML = '<i class="bi bi-trash me-1"></i> Löschen';
         }
@@ -447,7 +545,11 @@ document.addEventListener('DOMContentLoaded', function () {
             day: 'Tag',
             list: 'Liste'
         },
-        events: '{% url "cal_kit:events_json" %}',
+        events: function (info, successCb, failureCb) {
+            var url = '{% url "cal_kit:events_json" %}?start=' + info.startStr + '&end=' + info.endStr;
+            if (activeCatFilter) url += '&category=' + activeCatFilter;
+            fetch(url).then(function (r) { return r.json(); }).then(successCb).catch(failureCb);
+        },
         eventClassNames: function (arg) {
             var ext = arg.event.extendedProps || {};
             return ext.is_reminder ? ['cal-ev-outlook', 'cal-ev-reminder'] : ['cal-ev-outlook'];
@@ -582,6 +684,7 @@ document.addEventListener('DOMContentLoaded', function () {
             var ext = ev.extendedProps || {};
             openModal({
                 pk: ext.master_id || ev.id,
+                occ_id: ev.id,
                 title: ev.title,
                 start: toLocalInput(ev.start),
                 end: toLocalInput(ev.end || ev.start),
@@ -595,27 +698,34 @@ document.addEventListener('DOMContentLoaded', function () {
                 recurrence_rule: ext.recurrence_rule || 'none',
                 recurrence_interval: ext.recurrence_interval || 1,
                 recurrence_until: ext.recurrence_until || '',
-                is_recurring: !!ext.is_recurring
+                recurrence_weekdays: ext.recurrence_weekdays || '',
+                is_recurring: !!ext.is_recurring,
+                category_id: ext.category_id || ''
             });
         },
         eventDrop: function (info) {
+            var isRecurring = !!(info.event.extendedProps || {}).is_recurring;
+            var scope = isRecurring ? 'this' : 'all';
             fetch('/calendar/move/' + info.event.id + '/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
                 body: JSON.stringify({
                     start: info.event.start ? info.event.start.toISOString() : null,
                     end: info.event.end ? info.event.end.toISOString() : null,
-                    allDay: info.event.allDay
+                    allDay: info.event.allDay,
+                    scope: scope
                 })
             });
         },
         eventResize: function (info) {
+            var isRecurring = !!(info.event.extendedProps || {}).is_recurring;
             fetch('/calendar/move/' + info.event.id + '/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
                 body: JSON.stringify({
                     start: info.event.start ? info.event.start.toISOString() : null,
-                    end: info.event.end ? info.event.end.toISOString() : null
+                    end: info.event.end ? info.event.end.toISOString() : null,
+                    scope: isRecurring ? 'this' : 'all'
                 })
             });
         }
@@ -643,16 +753,41 @@ document.addEventListener('DOMContentLoaded', function () {
 
     delBtn.addEventListener('click', function () {
         var pk = document.getElementById('calEvPk').value;
+        var occId = formEl.dataset.occId || pk;
+        var isRecurring = formEl.dataset.isRecurring === '1';
         if (!pk) return;
-        fetch('/calendar/delete/' + pk + '/', {
-            method: 'POST',
-            headers: { 'X-CSRFToken': csrfToken, 'X-Requested-With': 'XMLHttpRequest' }
-        }).then(function (r) {
-            if (r.ok) {
-                if (typeof bootstrap !== 'undefined') bootstrap.Modal.getInstance(modalEl).hide();
-                calendar.refetchEvents();
+
+        if (isRecurring && occId !== pk) {
+            // Show scope choice
+            if (!confirm('Nur diesen Termin löschen?\n\nOK = Nur dieser Termin\nAbbrechen = Ganze Serie löschen')) {
+                // Cancel whole series
+                occId = pk;
             }
-        });
+            var scope = (occId !== pk) ? 'this' : 'all';
+            var fd = new FormData();
+            fd.append('scope', scope);
+            fd.append('csrfmiddlewaretoken', csrfToken);
+            fetch('/calendar/delete/' + occId + '/', {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                body: fd
+            }).then(function (r) {
+                if (r.ok) {
+                    if (typeof bootstrap !== 'undefined') bootstrap.Modal.getInstance(modalEl).hide();
+                    calendar.refetchEvents();
+                }
+            });
+        } else {
+            fetch('/calendar/delete/' + pk + '/', {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken, 'X-Requested-With': 'XMLHttpRequest' }
+            }).then(function (r) {
+                if (r.ok) {
+                    if (typeof bootstrap !== 'undefined') bootstrap.Modal.getInstance(modalEl).hide();
+                    calendar.refetchEvents();
+                }
+            });
+        }
     });
 });
 </script>

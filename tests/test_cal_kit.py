@@ -56,7 +56,7 @@ if not settings.configured:
 
 from django.contrib.auth import get_user_model
 from django.urls import include, path
-from cal_kit.models import CalendarEvent
+from cal_kit.models import CalendarEvent, CalendarCategory, CalendarEventException
 
 urlpatterns = [
     path("design-studio/", include("design_studio.urls")),
@@ -203,11 +203,58 @@ class CalKitTests(TestCase):
         feed = self.client.get("/calendar/feed.ics").content.decode("utf-8")
         self.assertIn("RRULE:FREQ=WEEKLY;UNTIL=20261125T", feed)
 
-        # 4. Delete series via occurrence id
+        # 4. Delete only one occurrence (scope=this), series stays
         occ_id = items[1]["id"]
-        dl = self.client.post(f"/calendar/delete/{occ_id}/", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        dl = self.client.post(f"/calendar/delete/{occ_id}/",
+                              {"scope": "this"}, HTTP_X_REQUESTED_WITH="XMLHttpRequest")
         self.assertEqual(dl.status_code, 200)
+        # Series still exists
+        self.assertEqual(CalendarEvent.objects.filter(title="Team Standup").count(), 1)
+        # Exception created
+        self.assertEqual(CalendarEventException.objects.filter(event__title="Team Standup", cancelled=True).count(), 1)
+
+        # 5. Delete whole series
+        dl2 = self.client.post(f"/calendar/delete/{ev_id}/", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        self.assertEqual(dl2.status_code, 200)
         self.assertEqual(CalendarEvent.objects.filter(title="Team Standup").count(), 0)
+
+    def test_calendar_categories_and_byday(self):
+        # Create a category
+        r = self.client.post("/calendar/categories/save/",
+                             {"name": "Arbeit", "color_state": "2"},
+                             HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        self.assertEqual(r.status_code, 200)
+        cat_id = r.json()["id"]
+
+        # Create event with category and BYDAY Mo+Mi
+        r2 = self.client.post("/calendar/save/", {
+            "title": "Standup MoMi",
+            "start_at": "2026-11-02T09:00",
+            "end_at": "2026-11-02T09:30",
+            "recurrence_rule": "weekly",
+            "recurrence_weekdays": "0,2",
+            "recurrence_until": "2026-11-26",  # excl. Nov 30 Mo → 4 Mo + 4 Mi = 8
+            "category": str(cat_id),
+        }, HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        self.assertEqual(r2.status_code, 200)
+        ev = CalendarEvent.objects.get(title="Standup MoMi")
+        self.assertEqual(ev.recurrence_weekdays, "0,2")
+        self.assertEqual(ev.category_id, cat_id)
+
+        # Nov 2026: Mondays = 2,9,16,23; Wednesdays = 4,11,18,25 → 8 occurrences
+        res = self.client.get("/calendar/events.json?start=2026-11-01T00:00:00Z&end=2026-11-30T23:59:59Z")
+        items = res.json()
+        self.assertEqual(len(items), 8)
+
+        # iCal BYDAY export
+        feed = self.client.get("/calendar/feed.ics").content.decode("utf-8")
+        self.assertIn("BYDAY=MO,WE", feed)
+
+        # Category filter
+        res_cat = self.client.get(f"/calendar/events.json?start=2026-11-01T00:00:00Z&end=2026-11-30T23:59:59Z&category={cat_id}")
+        self.assertEqual(len(res_cat.json()), 8)
+        res_no_cat = self.client.get("/calendar/events.json?start=2026-11-01T00:00:00Z&end=2026-11-30T23:59:59Z&category=99999")
+        self.assertEqual(len(res_no_cat.json()), 0)
 
 
 if __name__ == "__main__":

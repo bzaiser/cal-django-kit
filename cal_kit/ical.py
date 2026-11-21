@@ -2,6 +2,8 @@ import base64
 import urllib.request
 from datetime import datetime, timezone
 
+BYDAY_MAP = {"0": "MO", "1": "TU", "2": "WE", "3": "TH", "4": "FR", "5": "SA", "6": "SU"}
+
 
 def _fmt_ics_dt(dt: datetime, all_day: bool = False) -> str:
     if all_day:
@@ -51,10 +53,23 @@ def events_to_ics(events, prodid="-//cal-django-kit//DE", cal_name="Kalender") -
                 interval = getattr(ev, "recurrence_interval", 1) or 1
                 if interval > 1:
                     rrule_parts.append(f"INTERVAL={interval}")
+                # BYDAY for weekly with specific weekdays
+                weekdays_raw = getattr(ev, "recurrence_weekdays", "") or ""
+                if freq == "WEEKLY" and weekdays_raw:
+                    byday = ",".join(BYDAY_MAP[d] for d in weekdays_raw.split(",") if d in BYDAY_MAP)
+                    if byday:
+                        rrule_parts.append(f"BYDAY={byday}")
                 if getattr(ev, "recurrence_until", None):
                     until_dt = datetime.combine(ev.recurrence_until, datetime.max.time(), tzinfo=timezone.utc)
                     rrule_parts.append(f"UNTIL={_fmt_ics_dt(until_dt, False)}")
                 lines.append(f"RRULE:{';'.join(rrule_parts)}")
+            # EXDATE for cancelled exceptions
+            try:
+                cancelled = [e for e in ev.exceptions.all() if e.cancelled]
+                for exc in cancelled:
+                    lines.append(f"EXDATE:{_fmt_ics_dt(exc.original_start, ev.all_day)}")
+            except Exception:
+                pass
         if getattr(ev, "reminder_minutes", None) is not None:
             lines.extend([
                 "BEGIN:VALARM",
