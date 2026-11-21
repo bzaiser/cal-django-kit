@@ -215,14 +215,32 @@ def save_event_view(request):
 @login_required
 @require_POST
 def move_event_view(request, pk):
-    real_pk = pk.split("_")[0] if "_" in str(pk) else pk
-    # Check if this is an occurrence id (has underscore = timestamp suffix)
-    is_occurrence = "_" in str(pk)
-    ev = get_object_or_404(CalendarEvent, pk=real_pk, user=request.user)
     try:
         payload = json.loads(request.body.decode("utf-8"))
     except Exception:
         return JsonResponse({"status": "error"}, status=400)
+
+    real_pk = str(pk).split("_")[0] if "_" in str(pk) else str(pk)
+    if not real_pk.isdigit():
+        handlers = getattr(settings, "CAL_KIT_MOVE_HANDLERS", [])
+        for handler in handlers:
+            try:
+                if isinstance(handler, str):
+                    import importlib
+                    mod_name, func_name = handler.rsplit(".", 1)
+                    handler_fn = getattr(importlib.import_module(mod_name), func_name)
+                else:
+                    handler_fn = handler
+                res = handler_fn(request, str(pk), payload)
+                if res:
+                    return JsonResponse({"status": "ok"})
+            except Exception:
+                logger.exception("CAL_KIT_MOVE_HANDLERS error in %r", handler)
+        return JsonResponse({"status": "error", "message": "Event cannot be moved."}, status=400)
+
+    # Check if this is an occurrence id (has underscore = timestamp suffix)
+    is_occurrence = "_" in str(pk)
+    ev = get_object_or_404(CalendarEvent, pk=real_pk, user=request.user)
 
     scope = payload.get("scope", "all")  # "this" or "all"
 

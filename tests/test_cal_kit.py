@@ -321,6 +321,31 @@ class CalKitTests(TestCase):
             self.assertEqual(cat_res.status_code, 200)
             self.assertEqual(len(cat_res.json()), 0)
 
+        # External move handler hook
+        moved = []
+
+        def _fake_move_handler(request, pk, payload):
+            if pk == "ext-1":
+                moved.append((pk, payload.get("start")))
+                return True
+            return False
+
+        with override_settings(CAL_KIT_MOVE_HANDLERS=[_fake_move_handler]):
+            mv_ok = self.client.post(
+                "/calendar/move/ext-1/",
+                json.dumps({"start": "2026-11-22T14:00:00+01:00"}),
+                content_type="application/json",
+            )
+            self.assertEqual(mv_ok.status_code, 200)
+            self.assertEqual(moved, [("ext-1", "2026-11-22T14:00:00+01:00")])
+
+            mv_fail = self.client.post(
+                "/calendar/move/unknown-99/",
+                json.dumps({"start": "2026-11-22T14:00:00+01:00"}),
+                content_type="application/json",
+            )
+            self.assertEqual(mv_fail.status_code, 400)
+
     def test_no_missing_migrations(self):
         call_command("makemigrations", "cal_kit", "--check", "--dry-run", verbosity=0)
 

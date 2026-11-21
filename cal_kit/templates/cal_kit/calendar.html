@@ -857,37 +857,41 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         },
         eventDrop: function (info) {
-            if ((info.event.extendedProps || {}).read_only) {
-                info.revert();
-                return;
-            }
             var isRecurring = !!(info.event.extendedProps || {}).is_recurring;
             var scope = isRecurring ? 'this' : 'all';
-            fetch('/calendar/move/' + info.event.id + '/', {
+            fetch('/calendar/move/' + encodeURIComponent(info.event.id) + '/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
                 body: JSON.stringify({
                     start: info.event.start ? info.event.start.toISOString() : null,
                     end: info.event.end ? info.event.end.toISOString() : null,
+                    startStr: info.event.startStr || null,
+                    endStr: info.event.endStr || null,
                     allDay: info.event.allDay,
                     scope: scope
                 })
+            }).then(function (r) {
+                if (!r.ok) info.revert();
+            }).catch(function () {
+                info.revert();
             });
         },
         eventResize: function (info) {
-            if ((info.event.extendedProps || {}).read_only) {
-                info.revert();
-                return;
-            }
             var isRecurring = !!(info.event.extendedProps || {}).is_recurring;
-            fetch('/calendar/move/' + info.event.id + '/', {
+            fetch('/calendar/move/' + encodeURIComponent(info.event.id) + '/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
                 body: JSON.stringify({
                     start: info.event.start ? info.event.start.toISOString() : null,
                     end: info.event.end ? info.event.end.toISOString() : null,
+                    startStr: info.event.startStr || null,
+                    endStr: info.event.endStr || null,
                     scope: isRecurring ? 'this' : 'all'
                 })
+            }).then(function (r) {
+                if (!r.ok) info.revert();
+            }).catch(function () {
+                info.revert();
             });
         }
     });
