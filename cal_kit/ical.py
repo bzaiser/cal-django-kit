@@ -25,6 +25,7 @@ def events_to_ics(events, prodid="-//cal-django-kit//DE", cal_name="Kalender") -
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
         f"PRODID:{prodid}",
+        f"NAME:{_esc(cal_name)}",
         f"X-WR-CALNAME:{_esc(cal_name)}",
     ]
     for ev in events:
