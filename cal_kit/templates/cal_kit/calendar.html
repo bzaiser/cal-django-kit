@@ -579,7 +579,9 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('calEvPk').value = opts.pk || '';
         document.getElementById('calEvTitle').value = opts.title || '';
         document.getElementById('calEvStart').value = opts.start || '';
+        document.getElementById('calEvStart').dataset.prevVal = opts.start || '';
         document.getElementById('calEvEnd').value = opts.end || '';
+        document.getElementById('calEvEnd').dataset.prevVal = opts.end || '';
         document.getElementById('calEvAllDay').checked = !!opts.allDay;
         document.getElementById('calEvIsReminder').checked = !!opts.is_reminder;
         document.getElementById('calEvReminder').value = (opts.reminder_minutes !== null && opts.reminder_minutes !== undefined) ? String(opts.reminder_minutes) : '';
@@ -821,9 +823,21 @@ document.addEventListener('DOMContentLoaded', function () {
             card.style.display = 'none';
         },
         select: function (info) {
-            var s = info.start;
-            var e = info.end || new Date(s.getTime() + 3600000);
-            openModal({ start: toLocalInput(s), end: toLocalInput(e), allDay: info.allDay });
+            var now = new Date();
+            var s = new Date(info.start.getTime());
+            var e = info.end ? new Date(info.end.getTime()) : new Date(s.getTime() + 3600000);
+            var isMultiDayAllDay = info.allDay && ((e.getTime() - s.getTime()) > 86400000);
+            if (info.allDay) {
+                s.setHours(now.getHours(), now.getMinutes(), 0, 0);
+                if (isMultiDayAllDay) {
+                    var lastDay = new Date(e.getTime() - 86400000);
+                    lastDay.setHours(now.getHours(), now.getMinutes(), 0, 0);
+                    e = new Date(lastDay.getTime() + 3600000);
+                } else {
+                    e = new Date(s.getTime() + 3600000);
+                }
+            }
+            openModal({ start: toLocalInput(s), end: toLocalInput(e), allDay: isMultiDayAllDay });
         },
         eventClick: function (info) {
             var ev = info.event;
@@ -901,6 +915,54 @@ document.addEventListener('DOMContentLoaded', function () {
         var el = document.getElementById(id);
         if (el) el.addEventListener('change', function () { calendar.refetchEvents(); });
     });
+
+    var startInp = document.getElementById('calEvStart');
+    var endInp = document.getElementById('calEvEnd');
+    var allDayInp = document.getElementById('calEvAllDay');
+
+    function currentHHMM(offsetMinutes) {
+        var d = new Date(Date.now() + (offsetMinutes || 0) * 60000);
+        var pad = function (n) { return String(n).padStart(2, '0'); };
+        return pad(d.getHours()) + ':' + pad(d.getMinutes());
+    }
+
+    function fixZeroTimeOnInput(inp, offsetMinutes) {
+        if (!inp || !inp.value) return;
+        if (allDayInp && allDayInp.checked) return;
+        var prev = inp.dataset.prevVal || '';
+        var val = inp.value;
+        var parts = val.split('T');
+        if (parts.length === 2 && parts[1] === '00:00') {
+            var prevParts = prev.split('T');
+            if (!prev || prevParts[0] !== parts[0] || prevParts[1] === '00:00') {
+                inp.value = parts[0] + 'T' + currentHHMM(offsetMinutes);
+            }
+        }
+        inp.dataset.prevVal = inp.value;
+    }
+
+    if (startInp) {
+        ['input', 'change'].forEach(function (evName) {
+            startInp.addEventListener(evName, function () {
+                fixZeroTimeOnInput(startInp, 0);
+                if (endInp && startInp.value) {
+                    var sDate = new Date(startInp.value);
+                    var eDate = endInp.value ? new Date(endInp.value) : null;
+                    if (!isNaN(sDate.getTime()) && (!eDate || isNaN(eDate.getTime()) || eDate <= sDate || endInp.value.slice(-5) === '00:00')) {
+                        endInp.value = toLocalInput(new Date(sDate.getTime() + 3600000));
+                        endInp.dataset.prevVal = endInp.value;
+                    }
+                }
+            });
+        });
+    }
+    if (endInp) {
+        ['input', 'change'].forEach(function (evName) {
+            endInp.addEventListener(evName, function () {
+                fixZeroTimeOnInput(endInp, 60);
+            });
+        });
+    }
 
     document.getElementById('calNewBtn').addEventListener('click', function () {
         var now = new Date();
