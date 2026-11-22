@@ -327,8 +327,13 @@ def ical_feed_view(request):
     if not user:
         return HttpResponse("Unauthorized (bitte anmelden oder gültigen Feed-Token angeben)", status=401)
 
+    cal_name = (
+        getattr(settings, "CAL_KIT_CALENDAR_NAME", "")
+        or getattr(settings, "DESIGN_STUDIO_APP_NAME", "")
+        or "Kalender"
+    )
     events = CalendarEvent.objects.filter(user=user).prefetch_related("exceptions")
-    ics = events_to_ics(events)
+    ics = events_to_ics(events, cal_name=cal_name)
 
     # Optional: append provider ICS events (e.g. Buckezz list deadlines)
     try:
@@ -341,8 +346,10 @@ def ical_feed_view(request):
     except Exception:
         pass
 
+    from django.utils.text import slugify
+    fname = slugify(cal_name) or "calendar"
     resp = HttpResponse(ics, content_type="text/calendar; charset=utf-8")
-    resp["Content-Disposition"] = 'inline; filename="calendar.ics"'
+    resp["Content-Disposition"] = f'inline; filename="{fname}.ics"'
     return resp
 
 
