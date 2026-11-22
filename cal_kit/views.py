@@ -38,6 +38,11 @@ def _parse_dt(raw: str, fallback=None):
 
 @login_required
 def calendar_view(request):
+    from .reminders import dispatch_due_cal_reminders
+    try:
+        dispatch_due_cal_reminders(user=request.user)
+    except Exception:
+        pass
     now = timezone.now()
     upcoming_reminders = (
         CalendarEvent.objects.filter(user=request.user, end_at__gte=now)
@@ -53,6 +58,11 @@ def calendar_view(request):
 
 @login_required
 def events_json_view(request):
+    from .reminders import dispatch_due_cal_reminders
+    try:
+        dispatch_due_cal_reminders(user=request.user)
+    except Exception:
+        pass
     start_raw = request.GET.get("start")
     end_raw = request.GET.get("end")
     window_start = _parse_dt(start_raw, fallback=timezone.now() - timedelta(days=60))

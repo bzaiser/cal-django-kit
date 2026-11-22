@@ -37,6 +37,30 @@
         font-size: 1.25rem;
         font-weight: 700;
     }
+    .fc .fc-header-toolbar {
+        flex-wrap: wrap;
+        gap: 0.45rem;
+    }
+    @media (max-width: 767.98px) {
+        .fc .fc-header-toolbar {
+            row-gap: 0.5rem;
+        }
+        .fc .fc-toolbar-chunk {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.2rem;
+            max-width: 100%;
+        }
+        .fc .fc-button-primary {
+            padding: 0.25rem 0.48rem;
+            font-size: 0.74rem;
+            line-height: 1.2;
+        }
+        .fc .fc-toolbar-title {
+            font-size: 1rem;
+        }
+    }
     .fc .fc-col-header-cell {
         background: var(--app-table-header-bg, var(--app-primary));
         color: var(--app-table-header-text, #ffffff);
@@ -910,6 +934,25 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
     calendar.render();
+
+    (function enhanceToolbarIcons() {
+        var viewIcons = {
+            'fc-multiMonthYear-button': ['bi-calendar4-range', 'Jahr'],
+            'fc-dayGridMonth-button': ['bi-calendar-month', 'Monat'],
+            'fc-timeGridWeek-button': ['bi-calendar-week', 'Woche'],
+            'fc-timeGridDay-button': ['bi-calendar-day', 'Tag'],
+            'fc-listMonth-button': ['bi-list-ul', 'Liste']
+        };
+        Object.keys(viewIcons).forEach(function (cls) {
+            var btn = calEl.querySelector('.' + cls);
+            if (!btn) return;
+            var iconCls = viewIcons[cls][0];
+            var label = viewIcons[cls][1];
+            btn.setAttribute('title', label);
+            btn.setAttribute('aria-label', label);
+            btn.innerHTML = '<i class="bi ' + iconCls + '"></i><span class="d-none d-md-inline ms-1">' + label + '</span>';
+        });
+    })();
 
     ['calFilterTracker', 'calFilterReminder', 'calFilterCompleted'].forEach(function (id) {
         var el = document.getElementById(id);
