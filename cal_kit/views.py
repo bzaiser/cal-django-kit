@@ -241,7 +241,7 @@ def events_json_view(request):
                 "recurrence_weekdays": ev.recurrence_weekdays,
                 "category_id": ev.category_id,
                 "category_name": ev.category.name if ev.category else "",
-                "read_only": (ev.user_id != request.user.id and not request.user.is_staff),
+                "read_only": (ev.user_id != request.user.id and not _has_shared_editor_access(request.user)),
             },
         })
 
@@ -273,6 +273,14 @@ def events_json_view(request):
     return JsonResponse(items, safe=False)
 
 
+def _has_shared_editor_access(user) -> bool:
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    if getattr(user, "is_superuser", False) or getattr(user, "is_staff", False):
+        return True
+    return user.groups.filter(name__in=("Redakteur", "Leitung / Vorstand", "Vorstand")).exists()
+
+
 @login_required
 @require_POST
 def save_event_view(request):
@@ -280,7 +288,7 @@ def save_event_view(request):
     if "_" in pk:
         pk = pk.split("_")[0]
     if pk:
-        if request.user.is_staff:
+        if _has_shared_editor_access(request.user):
             ev = get_object_or_404(CalendarEvent, Q(pk=pk) & (Q(user=request.user) | Q(category__is_shared=True)))
         else:
             ev = get_object_or_404(CalendarEvent, pk=pk, user=request.user)
