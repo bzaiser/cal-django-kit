@@ -3,6 +3,7 @@ import json
 import logging
 import re
 
+from django.apps import apps
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -17,6 +18,96 @@ from .ical import events_to_ics
 from .models import RECURRENCE_CHOICES, CalendarCategory, CalendarEvent, CalendarEventException
 
 logger = logging.getLogger(__name__)
+
+
+def _get_domain_location_options() -> list[dict]:
+    """Return structured location options from domain_kit Addresses and Resource AssetItems."""
+    if not apps.is_installed("domain_kit"):
+        return []
+    options = []
+    try:
+        AssetItem = apps.get_model("domain_kit", "AssetItem")
+        for r in AssetItem.objects.filter(asset_type="resource").select_related("address").order_by("title"):
+            loc_str = r.title
+            if r.address:
+                loc_str = f"{r.title} ({r.address.city})" if r.address.city else r.title
+            options.append({
+                "ref": f"asset:{r.pk}",
+                "kind": "resource",
+                "group": "Räume & Ressourcen",
+                "label": loc_str[:140],
+            })
+    except Exception:
+        pass
+    try:
+        Address = apps.get_model("domain_kit", "Address")
+        for a in Address.objects.all().order_by("label", "city", "street"):
+            addr_parts = [p for p in [a.street, f"{a.postal_code} {a.city}".strip()] if p]
+            addr_txt = ", ".join(addr_parts)
+            lbl = f"{a.label}: {addr_txt}" if a.label and addr_txt else (addr_txt or a.label)
+            if lbl:
+                options.append({
+                    "ref": f"addr:{a.pk}",
+                    "kind": "address",
+                    "group": "Adressen & Standorte",
+                    "label": lbl[:140],
+                })
+    except Exception:
+        pass
+    return options
+
+
+def _find_location_conflicts(start_dt, end_dt, location: str = "", resource_ref: str = "", exclude_pk=None) -> list[dict]:
+    """Detect overlapping events at the same resource_ref or location across all users."""
+    loc = (location or "").strip()
+    ref = (resource_ref or "").strip()
+    if not ref and not loc:
+        return []
+    if not start_dt or not end_dt:
+        return []
+
+    loc_filter = Q()
+    if ref:
+        loc_filter |= Q(resource_ref=ref)
+    if loc:
+        loc_filter |= Q(location__iexact=loc)
+
+    qs = CalendarEvent.objects.filter(loc_filter).select_related("user")
+    if exclude_pk and str(exclude_pk).isdigit():
+        qs = qs.exclude(pk=int(exclude_pk))
+
+    conflicts = []
+    non_rec = qs.filter(recurrence_rule="none", start_at__lt=end_dt, end_at__gt=start_dt)
+    for ev in non_rec[:10]:
+        s_local = timezone.localtime(ev.start_at) if timezone.is_aware(ev.start_at) else ev.start_at
+        e_local = timezone.localtime(ev.end_at) if timezone.is_aware(ev.end_at) else ev.end_at
+        conflicts.append({
+            "id": ev.id,
+            "title": ev.title,
+            "location": ev.location,
+            "start": s_local.strftime("%d.%m.%Y %H:%M"),
+            "end": e_local.strftime("%H:%M"),
+            "owner": ev.user.get_username(),
+        })
+
+    win_s = start_dt - timedelta(days=1)
+    win_e = end_dt + timedelta(days=1)
+    rec = qs.exclude(recurrence_rule="none").filter(start_at__lte=win_e).prefetch_related("exceptions")
+    for ev in rec[:30]:
+        for occ_s, occ_e, occ_t in ev.get_occurrences(win_s, win_e):
+            if occ_s < end_dt and occ_e > start_dt:
+                s_local = timezone.localtime(occ_s) if timezone.is_aware(occ_s) else occ_s
+                e_local = timezone.localtime(occ_e) if timezone.is_aware(occ_e) else occ_e
+                conflicts.append({
+                    "id": ev.id,
+                    "title": occ_t,
+                    "location": ev.location,
+                    "start": s_local.strftime("%d.%m.%Y %H:%M"),
+                    "end": e_local.strftime("%H:%M"),
+                    "owner": ev.user.get_username(),
+                })
+                break
+    return conflicts[:10]
 
 
 def _parse_dt(raw: str, fallback=None):
@@ -49,11 +140,28 @@ def calendar_view(request):
         .filter(Q(is_reminder=True) | Q(reminder_minutes__isnull=False))
         .order_by("start_at")[:6]
     )
-    categories = CalendarCategory.objects.filter(user=request.user)
+    categories = CalendarCategory.objects.filter(Q(user=request.user) | Q(is_shared=True)).distinct()
+    location_options = _get_domain_location_options()
     return render(request, "cal_kit/calendar.html", {
         "upcoming_reminders": upcoming_reminders,
         "categories": categories,
+        "location_options": location_options,
     })
+
+
+@login_required
+def conflict_check_view(request):
+    start_dt = _parse_dt(request.GET.get("start", ""))
+    end_dt = _parse_dt(request.GET.get("end", ""))
+    if start_dt and not end_dt:
+        end_dt = start_dt + timedelta(hours=1)
+    location = (request.GET.get("location") or "").strip()
+    resource_ref = (request.GET.get("resource_ref") or "").strip()
+    exclude_pk = (request.GET.get("exclude_pk") or "").strip()
+    if "_" in exclude_pk:
+        exclude_pk = exclude_pk.split("_")[0]
+    conflicts = _find_location_conflicts(start_dt, end_dt, location=location, resource_ref=resource_ref, exclude_pk=exclude_pk)
+    return JsonResponse({"conflicts": conflicts})
 
 
 @login_required
@@ -71,16 +179,17 @@ def events_json_view(request):
     # Optional category filter
     cat_id = request.GET.get("category")
 
+    visible_filter = Q(user=request.user) | Q(category__is_shared=True)
     non_recurring = CalendarEvent.objects.filter(
-        user=request.user,
+        visible_filter,
         recurrence_rule="none",
         end_at__gte=window_start,
         start_at__lte=window_end,
-    ).select_related("category")
+    ).select_related("category").distinct()
     recurring = CalendarEvent.objects.filter(
-        user=request.user,
+        visible_filter,
         start_at__lte=window_end,
-    ).exclude(recurrence_rule="none").prefetch_related("exceptions").select_related("category")
+    ).exclude(recurrence_rule="none").prefetch_related("exceptions").select_related("category").distinct()
 
     if cat_id:
         non_recurring = non_recurring.filter(category_id=cat_id)
@@ -101,11 +210,13 @@ def events_json_view(request):
             "extendedProps": {
                 "master_id": str(ev.id),
                 "location": ev.location,
+                "resource_ref": ev.resource_ref,
                 "description": ev.description,
                 "color_state": ev.color_state,
                 "icon": ev.icon,
                 "reminder_minutes": ev.reminder_minutes,
                 "is_reminder": ev.is_reminder,
+                "is_public": ev.is_public,
                 "all_day": ev.all_day,
                 "has_alarm": ev.reminder_minutes is not None,
                 "has_location": bool(ev.location),
@@ -116,6 +227,7 @@ def events_json_view(request):
                 "recurrence_weekdays": ev.recurrence_weekdays,
                 "category_id": ev.category_id,
                 "category_name": ev.category.name if ev.category else "",
+                "read_only": (ev.user_id != request.user.id and not request.user.is_staff),
             },
         })
 
@@ -153,7 +265,13 @@ def save_event_view(request):
     pk = (request.POST.get("pk") or "").strip()
     if "_" in pk:
         pk = pk.split("_")[0]
-    ev = get_object_or_404(CalendarEvent, pk=pk, user=request.user) if pk else CalendarEvent(user=request.user)
+    if pk:
+        if request.user.is_staff:
+            ev = get_object_or_404(CalendarEvent, Q(pk=pk) & (Q(user=request.user) | Q(category__is_shared=True)))
+        else:
+            ev = get_object_or_404(CalendarEvent, pk=pk, user=request.user)
+    else:
+        ev = CalendarEvent(user=request.user)
     title = (request.POST.get("title") or "").strip()[:140]
     start_raw = request.POST.get("start_at", "")
     if not title or not start_raw:
@@ -169,7 +287,7 @@ def save_event_view(request):
     ev.end_at = end_dt
     ev.all_day = bool(request.POST.get("all_day"))
     ev.is_reminder = bool(request.POST.get("is_reminder"))
-    if "is_public" in request.POST:
+    if "is_public" in request.POST or "form_has_public_flag" in request.POST:
         ev.is_public = bool(request.POST.get("is_public"))
     raw_rem = (request.POST.get("reminder_minutes") or "").strip()
     if raw_rem.isdigit():
@@ -178,6 +296,7 @@ def save_event_view(request):
         ev.reminder_minutes = None
     ev.reminder_sent = False
     ev.location = (request.POST.get("location") or "").strip()[:140]
+    ev.resource_ref = (request.POST.get("resource_ref") or "").strip()[:64]
     ev.description = (request.POST.get("description") or "").strip()
     try:
         ev.color_state = max(1, min(8, int(request.POST.get("color_state") or 1)))
@@ -210,7 +329,9 @@ def save_event_view(request):
     cat_id = (request.POST.get("category") or "").strip()
     if cat_id and cat_id.isdigit():
         try:
-            ev.category = CalendarCategory.objects.get(pk=cat_id, user=request.user)
+            ev.category = CalendarCategory.objects.filter(Q(pk=cat_id) & (Q(user=request.user) | Q(is_shared=True))).first()
+            if ev.category and ev.category.is_public_default and "is_public" not in request.POST and "form_has_public_flag" not in request.POST:
+                ev.is_public = True
         except CalendarCategory.DoesNotExist:
             ev.category = None
     else:
@@ -381,6 +502,8 @@ def save_category_view(request):
         cat.color_state = 1
     raw_icon = (request.POST.get("icon") or "").strip()[:40]
     cat.icon = raw_icon if raw_icon.startswith("bi-") else ""
+    cat.is_shared = bool(request.POST.get("is_shared"))
+    cat.is_public_default = bool(request.POST.get("is_public_default"))
     cat.save()
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
         return JsonResponse({"status": "ok", "id": cat.id, "name": cat.name, "color_state": cat.color_state})

@@ -346,6 +346,56 @@ class CalKitTests(TestCase):
             )
             self.assertEqual(mv_fail.status_code, 400)
 
+    def test_shared_categories_public_flag_and_location_conflict_check(self):
+        from django.contrib.auth import get_user_model
+        from cal_kit.models import CalendarCategory, CalendarEvent
+
+        User = get_user_model()
+        other = User.objects.create_user(username="member2", password="pw")
+
+        # 1. Shared category with is_public_default
+        rcat = self.client.post("/calendar/categories/save/", {
+            "name": "Vereinstermine",
+            "color_state": "2",
+            "is_shared": "on",
+            "is_public_default": "on",
+        }, HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        self.assertEqual(rcat.status_code, 200)
+        cat = CalendarCategory.objects.get(pk=rcat.json()["id"])
+        self.assertTrue(cat.is_shared)
+        self.assertTrue(cat.is_public_default)
+
+        # 2. Save event with resource_ref + is_public
+        rev = self.client.post("/calendar/save/", {
+            "title": "Vorstandssitzung",
+            "start_at": "2026-12-01T18:00",
+            "end_at": "2026-12-01T20:00",
+            "location": "Großer Saal",
+            "resource_ref": "asset:7",
+            "category": str(cat.id),
+            "form_has_public_flag": "1",
+            "is_public": "on",
+        }, HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        self.assertEqual(rev.status_code, 200)
+        ev = CalendarEvent.objects.get(pk=rev.json()["id"])
+        self.assertTrue(ev.is_public)
+        self.assertEqual(ev.resource_ref, "asset:7")
+
+        # 3. Other user sees shared event (read_only=True) and gets conflict warning for same room
+        c2 = Client()
+        c2.force_login(other)
+        ev_json = c2.get("/calendar/events.json?start=2026-12-01T00:00:00Z&end=2026-12-02T00:00:00Z").json()
+        self.assertEqual(len(ev_json), 1)
+        self.assertTrue(ev_json[0]["extendedProps"]["read_only"])
+
+        conf = c2.get("/calendar/check-conflict/?start=2026-12-01T19:00&end=2026-12-01T21:00&resource_ref=asset:7&location=Gro%C3%9Fer%20Saal").json()
+        self.assertEqual(len(conf["conflicts"]), 1)
+        self.assertEqual(conf["conflicts"][0]["title"], "Vorstandssitzung")
+
+        # Editing the same event with exclude_pk does not conflict with itself
+        self_conf = self.client.get(f"/calendar/check-conflict/?start=2026-12-01T19:00&end=2026-12-01T21:00&resource_ref=asset:7&exclude_pk={ev.id}").json()
+        self.assertEqual(len(self_conf["conflicts"]), 0)
+
     def test_no_missing_migrations(self):
         call_command("makemigrations", "cal_kit", "--check", "--dry-run", verbosity=0)
 

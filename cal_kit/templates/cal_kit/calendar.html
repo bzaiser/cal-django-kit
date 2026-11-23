@@ -442,6 +442,8 @@
         <form id="calEventForm" method="post" action="{% url 'cal_kit:save_event' %}" class="modal-content">
             {% csrf_token %}
             <input type="hidden" name="pk" id="calEvPk" value="">
+            <input type="hidden" name="form_has_public_flag" value="1">
+            <input type="hidden" name="resource_ref" id="calEvResourceRef" value="">
             <div class="modal-header">
                 <h5 class="modal-title" id="calModalTitle">{% trans "Neuer Termin" %}</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -518,6 +520,10 @@
                             <input type="checkbox" name="is_reminder" id="calEvIsReminder" class="form-check-input">
                             <label class="form-check-label small" for="calEvIsReminder"><i class="bi bi-bell me-1"></i>{% trans "Als Erinnerung" %}</label>
                         </div>
+                        <div class="form-check mt-1">
+                            <input type="checkbox" name="is_public" id="calEvIsPublic" class="form-check-input">
+                            <label class="form-check-label small" for="calEvIsPublic"><i class="bi bi-globe2 me-1"></i>{% trans "Auf öffentlicher Webseite" %}</label>
+                        </div>
                     </div>
                 </div>
                 <div class="mb-2">
@@ -547,8 +553,24 @@
                     </select>
                 </div>
                 <div class="mb-2">
-                    <label class="form-label small fw-semibold">{% trans "Ort" %}</label>
-                    <input type="text" name="location" id="calEvLocation" class="form-control form-control-sm">
+                    <label class="form-label small fw-semibold"><i class="bi bi-geo-alt me-1"></i>{% trans "Ort / Raum / Ressource" %}</label>
+                    {% if location_options %}
+                    <select id="calEvLocationSelect" class="form-select form-select-sm mb-1">
+                        <option value="">{% trans "– Freitext / Kein hinterlegter Ort –" %}</option>
+                        {% for opt in location_options %}
+                        <option value="{{ opt.ref }}" data-label="{{ opt.label }}">[{{ opt.group }}] {{ opt.label }}</option>
+                        {% endfor %}
+                    </select>
+                    {% endif %}
+                    <input type="text" name="location" id="calEvLocation" class="form-control form-control-sm" placeholder="{% trans 'Ort, Raum oder Adresse eingeben...' %}">
+                    <div id="calConflictWarning" class="alert alert-warning py-2 px-3 small mt-2 mb-0 d-none">
+                        <div class="fw-semibold mb-1"><i class="bi bi-exclamation-triangle-fill me-1"></i>{% trans "Mögliche Doppelbelegung erkannt:" %}</div>
+                        <ul id="calConflictList" class="mb-2 ps-3"></ul>
+                        <div class="form-check mb-0">
+                            <input type="checkbox" class="form-check-input" id="calAllowConflict">
+                            <label class="form-check-label fw-semibold" for="calAllowConflict">{% trans "Trotzdem speichern" %}</label>
+                        </div>
+                    </div>
                 </div>
                 <div class="mb-2">
                     <label class="form-label small fw-semibold">{% trans "Beschreibung" %}</label>
@@ -560,7 +582,7 @@
                     <select name="category" id="calEvCategory" class="form-select form-select-sm">
                         <option value="">{% trans "Keine Kategorie" %}</option>
                         {% for cat in categories %}
-                        <option value="{{ cat.id }}">{{ cat.name }}</option>
+                        <option value="{{ cat.id }}" data-public-default="{% if cat.is_public_default %}1{% else %}0{% endif %}">{{ cat.name }}{% if cat.is_shared %} (Team){% endif %}</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -598,9 +620,11 @@
                             <span class="rounded-circle d-inline-block" style="width:12px;height:12px;background:var(--theme-state-{{ cat.color_state }}, var(--app-primary, #0d6efd));"></span>
                             {% if cat.icon %}<i class="bi {{ cat.icon }}"></i>{% endif %}
                             <span class="fw-semibold small">{{ cat.name }}</span>
+                            {% if cat.is_shared %}<span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25">{% trans "Team" %}</span>{% endif %}
+                            {% if cat.is_public_default %}<span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25">{% trans "Öffentlich" %}</span>{% endif %}
                         </div>
                         <div class="d-flex gap-1">
-                            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 cal-cat-edit-btn" data-id="{{ cat.id }}" data-name="{{ cat.name }}" data-color="{{ cat.color_state }}" data-icon="{{ cat.icon }}" title="{% trans 'Bearbeiten' %}"><i class="bi bi-pencil"></i></button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 cal-cat-edit-btn" data-id="{{ cat.id }}" data-name="{{ cat.name }}" data-color="{{ cat.color_state }}" data-icon="{{ cat.icon }}" data-shared="{% if cat.is_shared %}1{% else %}0{% endif %}" data-public="{% if cat.is_public_default %}1{% else %}0{% endif %}" title="{% trans 'Bearbeiten' %}"><i class="bi bi-pencil"></i></button>
                             <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2 cal-cat-del-btn" data-url="{% url 'cal_kit:delete_category' cat.id %}" data-name="{{ cat.name }}" title="{% trans 'Löschen' %}"><i class="bi bi-trash"></i></button>
                         </div>
                     </div>
@@ -639,6 +663,16 @@
                             <button type="button" class="cal-icon-btn" data-icon="bi-cake2-fill" title="{% trans 'Geburtstag' %}"><i class="bi bi-cake2-fill"></i></button>
                             <button type="button" class="cal-icon-btn" data-icon="bi-check2-square" title="{% trans 'Aufgaben' %}"><i class="bi bi-check2-square"></i></button>
                             <button type="button" class="cal-icon-btn" data-icon="bi-star-fill" title="{% trans 'Wichtig' %}"><i class="bi bi-star-fill"></i></button>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="is_shared" id="calCatShared">
+                            <label class="form-check-label small" for="calCatShared">{% trans "Geteilter Vereins-/Team-Kalender (für alle Mitglieder sichtbar)" %}</label>
+                        </div>
+                        <div class="form-check mt-1">
+                            <input class="form-check-input" type="checkbox" name="is_public_default" id="calCatPublicDefault">
+                            <label class="form-check-label small" for="calCatPublicDefault">{% trans "Neue Termine standardmäßig auf öffentlicher Webseite anzeigen" %}</label>
                         </div>
                     </div>
                     <div class="d-flex justify-content-end gap-2">
@@ -743,6 +777,8 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('calEvEnd').dataset.prevVal = opts.end || '';
         document.getElementById('calEvAllDay').checked = !!opts.allDay;
         document.getElementById('calEvIsReminder').checked = !!opts.is_reminder;
+        var pubEl = document.getElementById('calEvIsPublic');
+        if (pubEl) pubEl.checked = !!opts.is_public;
         document.getElementById('calEvReminder').value = (opts.reminder_minutes !== null && opts.reminder_minutes !== undefined) ? String(opts.reminder_minutes) : '';
         var rule = opts.recurrence_rule || 'none';
         document.getElementById('calEvRecurrenceRule').value = rule;
@@ -751,6 +787,14 @@ document.addEventListener('DOMContentLoaded', function () {
         toggleWeekdayRow(rule);
         setWeekdays(opts.recurrence_weekdays || '');
         document.getElementById('calEvLocation').value = opts.location || '';
+        var refEl = document.getElementById('calEvResourceRef');
+        if (refEl) refEl.value = opts.resource_ref || '';
+        var locSel = document.getElementById('calEvLocationSelect');
+        if (locSel) locSel.value = opts.resource_ref || '';
+        var warnBox = document.getElementById('calConflictWarning');
+        if (warnBox) warnBox.classList.add('d-none');
+        var allowChk = document.getElementById('calAllowConflict');
+        if (allowChk) allowChk.checked = false;
         document.getElementById('calEvDesc').value = opts.description || '';
         var catEl = document.getElementById('calEvCategory');
         if (catEl) catEl.value = opts.category_id ? String(opts.category_id) : '';
@@ -766,6 +810,7 @@ document.addEventListener('DOMContentLoaded', function () {
             delBtn.innerHTML = '<i class="bi bi-trash me-1"></i> Löschen';
         }
         if (typeof bootstrap !== 'undefined') bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        if (typeof checkLocationConflict === 'function') checkLocationConflict();
     }
 
     var calendar = new FullCalendar.Calendar(calEl, {
@@ -1016,11 +1061,13 @@ document.addEventListener('DOMContentLoaded', function () {
                 end: toLocalInput(ev.end || ev.start),
                 allDay: ev.allDay,
                 location: ext.location,
+                resource_ref: ext.resource_ref || '',
                 description: ext.description,
                 color_state: ext.color_state || 1,
                 icon: ext.icon || '',
                 reminder_minutes: ext.reminder_minutes,
                 is_reminder: !!ext.is_reminder,
+                is_public: !!ext.is_public,
                 recurrence_rule: ext.recurrence_rule || 'none',
                 recurrence_interval: ext.recurrence_interval || 1,
                 recurrence_until: ext.recurrence_until || '',
@@ -1107,6 +1154,80 @@ document.addEventListener('DOMContentLoaded', function () {
     var startInp = document.getElementById('calEvStart');
     var endInp = document.getElementById('calEvEnd');
     var allDayInp = document.getElementById('calEvAllDay');
+    var locSel = document.getElementById('calEvLocationSelect');
+    var locInp = document.getElementById('calEvLocation');
+    var refInp = document.getElementById('calEvResourceRef');
+    var catSelect = document.getElementById('calEvCategory');
+    var conflictTimer = null;
+
+    function checkLocationConflict() {
+        var warnBox = document.getElementById('calConflictWarning');
+        var listEl = document.getElementById('calConflictList');
+        if (!warnBox || !listEl || !startInp || !startInp.value) return;
+        var locVal = locInp ? locInp.value.trim() : '';
+        var refVal = refInp ? refInp.value.trim() : '';
+        if (!locVal && !refVal) {
+            warnBox.classList.add('d-none');
+            listEl.innerHTML = '';
+            return;
+        }
+        clearTimeout(conflictTimer);
+        conflictTimer = setTimeout(function () {
+            var pk = document.getElementById('calEvPk') ? document.getElementById('calEvPk').value : '';
+            var url = '{% url "cal_kit:check_conflict" %}?start=' + encodeURIComponent(startInp.value) +
+                '&end=' + encodeURIComponent(endInp && endInp.value ? endInp.value : '') +
+                '&location=' + encodeURIComponent(locVal) +
+                '&resource_ref=' + encodeURIComponent(refVal) +
+                '&exclude_pk=' + encodeURIComponent(pk);
+            fetch(url).then(function (r) { return r.ok ? r.json() : null; }).then(function (data) {
+                var arr = (data && Array.isArray(data.conflicts)) ? data.conflicts : [];
+                listEl.innerHTML = '';
+                if (!arr.length) {
+                    warnBox.classList.add('d-none');
+                    return;
+                }
+                arr.forEach(function (c) {
+                    var li = document.createElement('li');
+                    li.textContent = (c.location || locVal) + ': ' + c.start + '–' + c.end + ' „' + c.title + '“ (' + c.owner + ')';
+                    listEl.appendChild(li);
+                });
+                warnBox.classList.remove('d-none');
+            }).catch(function () {});
+        }, 180);
+    }
+
+    if (locSel) {
+        locSel.addEventListener('change', function () {
+            var opt = locSel.selectedOptions && locSel.selectedOptions[0];
+            if (refInp) refInp.value = locSel.value || '';
+            if (locInp && opt && locSel.value) {
+                locInp.value = opt.dataset.label || '';
+            }
+            checkLocationConflict();
+        });
+    }
+    if (locInp) {
+        locInp.addEventListener('input', function () {
+            if (locSel && locSel.selectedOptions && locSel.selectedOptions[0] && locSel.value) {
+                var selLbl = locSel.selectedOptions[0].dataset.label || '';
+                if (locInp.value.trim() !== selLbl.trim()) {
+                    locSel.value = '';
+                    if (refInp) refInp.value = '';
+                }
+            }
+            checkLocationConflict();
+        });
+    }
+    if (catSelect) {
+        catSelect.addEventListener('change', function () {
+            var pk = document.getElementById('calEvPk') ? document.getElementById('calEvPk').value : '';
+            var pubEl = document.getElementById('calEvIsPublic');
+            var opt = catSelect.selectedOptions && catSelect.selectedOptions[0];
+            if (!pk && pubEl && opt && opt.dataset.publicDefault === '1') {
+                pubEl.checked = true;
+            }
+        });
+    }
 
     function currentHHMM(offsetMinutes) {
         var d = new Date(Date.now() + (offsetMinutes || 0) * 60000);
@@ -1141,6 +1262,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         endInp.dataset.prevVal = endInp.value;
                     }
                 }
+                checkLocationConflict();
             });
         });
     }
@@ -1148,6 +1270,7 @@ document.addEventListener('DOMContentLoaded', function () {
         ['input', 'change'].forEach(function (evName) {
             endInp.addEventListener(evName, function () {
                 fixZeroTimeOnInput(endInp, 60);
+                checkLocationConflict();
             });
         });
     }
@@ -1237,6 +1360,10 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('calCatName').value = '';
         document.getElementById('calCatFormLabel').textContent = 'Neue Kategorie';
         document.getElementById('calCatResetBtn').classList.add('d-none');
+        var sh = document.getElementById('calCatShared');
+        if (sh) sh.checked = false;
+        var pb = document.getElementById('calCatPublicDefault');
+        if (pb) pb.checked = false;
         setCatColor(1);
         setCatIcon('');
     }
@@ -1264,6 +1391,10 @@ document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('calCatResetBtn').classList.remove('d-none');
             setCatColor(btn.dataset.color || 1);
             setCatIcon(btn.dataset.icon || '');
+            var sh = document.getElementById('calCatShared');
+            if (sh) sh.checked = btn.dataset.shared === '1';
+            var pb = document.getElementById('calCatPublicDefault');
+            if (pb) pb.checked = btn.dataset.public === '1';
             document.getElementById('calCatName').focus();
         });
     });

@@ -30,6 +30,8 @@ class CalendarCategory(models.Model):
     color_state = models.PositiveSmallIntegerField(default=1)
     icon = models.CharField(max_length=40, blank=True, default="")
     is_default = models.BooleanField(default=False)
+    is_shared = models.BooleanField(default=False)
+    is_public_default = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["name"]
@@ -56,6 +58,7 @@ class CalendarEvent(models.Model):
     end_at = models.DateTimeField()
     all_day = models.BooleanField(default=False)
     location = models.CharField(max_length=140, blank=True, default="")
+    resource_ref = models.CharField(max_length=64, blank=True, default="", db_index=True)
     description = models.TextField(blank=True, default="")
     color_state = models.PositiveSmallIntegerField(default=1)
     icon = models.CharField(max_length=40, blank=True, default="")
