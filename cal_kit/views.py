@@ -142,10 +142,12 @@ def calendar_view(request):
     )
     categories = CalendarCategory.objects.filter(Q(user=request.user) | Q(is_shared=True)).distinct()
     location_options = _get_domain_location_options()
+    instructors = _get_domain_instructors()
     return render(request, "cal_kit/calendar.html", {
         "upcoming_reminders": upcoming_reminders,
         "categories": categories,
         "location_options": location_options,
+        "instructors": instructors,
     })
 
 
@@ -225,6 +227,11 @@ def events_json_view(request):
                 "master_id": str(ev.id),
                 "location": ev.location,
                 "resource_ref": ev.resource_ref,
+                "instructor_ref": ev.instructor_ref,
+                "instructor_name": ev.instructor_name,
+                "allow_registration": ev.allow_registration,
+                "max_participants": ev.max_participants,
+                "registration_count": _event_registration_count(ev.id) if ev.allow_registration else 0,
                 "description": ev.description,
                 "color_state": ev.color_state,
                 "icon": ev.icon,
@@ -241,7 +248,11 @@ def events_json_view(request):
                 "recurrence_weekdays": ev.recurrence_weekdays,
                 "category_id": ev.category_id,
                 "category_name": ev.category.name if ev.category else "",
-                "read_only": (ev.user_id != request.user.id and not _has_shared_editor_access(request.user)),
+                "read_only": (
+                    ev.user_id != request.user.id
+                    and not _has_shared_editor_access(request.user)
+                    and ev.instructor_ref not in _user_instructor_refs(request.user)
+                ),
             },
         })
 
@@ -273,6 +284,43 @@ def events_json_view(request):
     return JsonResponse(items, safe=False)
 
 
+def _get_domain_instructors():
+    if not apps.is_installed("domain_kit"):
+        return []
+    try:
+        from domain_kit.models import Person
+        return [{"ref": f"person:{p.id}", "label": p.full_name} for p in Person.objects.order_by("last_name", "first_name")[:200]]
+    except Exception:
+        return []
+
+
+def _user_instructor_refs(user) -> set[str]:
+    if not user or not getattr(user, "is_authenticated", False) or not apps.is_installed("domain_kit"):
+        return set()
+    try:
+        from domain_kit.models import Person
+        return {f"person:{pid}" for pid in Person.objects.filter(user=user).values_list("id", flat=True)}
+    except Exception:
+        return set()
+
+
+def _event_registration_count(event_id: int) -> int:
+    if not apps.is_installed("list_kit"):
+        return 0
+    try:
+        from list_kit.models import Entry
+        return (
+            Entry.objects.filter(
+                collection__template__slug="kurs-anmeldung",
+                custom_data_json__event_id=str(event_id),
+            )
+            .exclude(status__iexact="Abgelehnt")
+            .count()
+        )
+    except Exception:
+        return 0
+
+
 def _has_shared_editor_access(user) -> bool:
     if not user or not getattr(user, "is_authenticated", False):
         return False
@@ -288,8 +336,11 @@ def save_event_view(request):
     if "_" in pk:
         pk = pk.split("_")[0]
     if pk:
+        inst_refs = _user_instructor_refs(request.user)
         if _has_shared_editor_access(request.user):
             ev = get_object_or_404(CalendarEvent, Q(pk=pk) & (Q(user=request.user) | Q(category__is_shared=True)))
+        elif inst_refs:
+            ev = get_object_or_404(CalendarEvent, Q(pk=pk) & (Q(user=request.user) | Q(instructor_ref__in=inst_refs)))
         else:
             ev = get_object_or_404(CalendarEvent, pk=pk, user=request.user)
     else:
@@ -319,6 +370,23 @@ def save_event_view(request):
     ev.reminder_sent = False
     ev.location = (request.POST.get("location") or "").strip()[:140]
     ev.resource_ref = (request.POST.get("resource_ref") or "").strip()[:64]
+    if "instructor_ref" in request.POST or "form_has_instructor" in request.POST:
+        iref = (request.POST.get("instructor_ref") or "").strip()[:64]
+        ev.instructor_ref = iref
+        iname = (request.POST.get("instructor_name") or "").strip()[:140]
+        if iref.startswith("person:") and not iname and apps.is_installed("domain_kit"):
+            try:
+                from domain_kit.models import Person
+                p_obj = Person.objects.filter(pk=int(iref.split(":", 1)[1])).first()
+                iname = p_obj.full_name if p_obj else ""
+            except Exception:
+                pass
+        ev.instructor_name = iname
+    if "allow_registration" in request.POST or "form_has_registration" in request.POST:
+        ev.allow_registration = bool(request.POST.get("allow_registration"))
+    if "max_participants" in request.POST:
+        raw_mp = (request.POST.get("max_participants") or "").strip()
+        ev.max_participants = int(raw_mp) if raw_mp.isdigit() and int(raw_mp) > 0 else None
     ev.description = (request.POST.get("description") or "").strip()
     try:
         ev.color_state = max(1, min(8, int(request.POST.get("color_state") or 1)))

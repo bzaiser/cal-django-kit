@@ -445,6 +445,8 @@
             {% csrf_token %}
             <input type="hidden" name="pk" id="calEvPk" value="">
             <input type="hidden" name="form_has_public_flag" value="1">
+            <input type="hidden" name="form_has_instructor" value="1">
+            <input type="hidden" name="form_has_registration" value="1">
             <input type="hidden" name="resource_ref" id="calEvResourceRef" value="">
             <div class="modal-header">
                 <h5 class="modal-title" id="calModalTitle">{% trans "Neuer Termin" %}</h5>
@@ -526,6 +528,25 @@
                             <input type="checkbox" name="is_public" id="calEvIsPublic" class="form-check-input">
                             <label class="form-check-label small" for="calEvIsPublic"><i class="bi bi-globe2 me-1"></i>{% trans "Auf öffentlicher Webseite" %}</label>
                         </div>
+                        <div class="form-check mt-1">
+                            <input type="checkbox" name="allow_registration" id="calEvAllowReg" class="form-check-input">
+                            <label class="form-check-label small" for="calEvAllowReg"><i class="bi bi-person-plus me-1"></i>{% trans "Online-Anmeldung erlauben" %}</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="row g-2 mb-2">
+                    {% if instructors %}
+                    <div class="col-md-7">
+                        <label class="form-label small fw-semibold"><i class="bi bi-mortarboard me-1"></i>{% trans "Dozent / Leitung" %}</label>
+                        <select name="instructor_ref" id="calEvInstructorRef" class="form-select form-select-sm">
+                            <option value="">{% trans "– Keine Leitung –" %}</option>
+                            {% for inst in instructors %}<option value="{{ inst.ref }}">{{ inst.label }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+                    <div class="col-md-5">
+                        <label class="form-label small fw-semibold">{% trans "Max. Teilnehmer" %} <span id="calEvRegBadge" class="badge text-bg-info d-none ms-1"></span></label>
+                        <input type="number" min="1" name="max_participants" id="calEvMaxParticipants" class="form-control form-control-sm" placeholder="unbegrenzt">
                     </div>
                 </div>
                 <div class="mb-2">
@@ -812,6 +833,22 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('calEvIsReminder').checked = !!opts.is_reminder;
         var pubEl = document.getElementById('calEvIsPublic');
         if (pubEl) pubEl.checked = !!opts.is_public;
+        var regEl = document.getElementById('calEvAllowReg');
+        if (regEl) regEl.checked = !!opts.allow_registration;
+        var instEl = document.getElementById('calEvInstructorRef');
+        if (instEl) instEl.value = opts.instructor_ref || '';
+        var mpEl = document.getElementById('calEvMaxParticipants');
+        if (mpEl) mpEl.value = opts.max_participants ? String(opts.max_participants) : '';
+        var regBadge = document.getElementById('calEvRegBadge');
+        if (regBadge) {
+            if (opts.allow_registration) {
+                var cnt = Number(opts.registration_count || 0);
+                regBadge.textContent = opts.max_participants ? (cnt + '/' + opts.max_participants + ' angemeldet') : (cnt + ' angemeldet');
+                regBadge.classList.remove('d-none');
+            } else {
+                regBadge.classList.add('d-none');
+            }
+        }
         document.getElementById('calEvReminder').value = (opts.reminder_minutes !== null && opts.reminder_minutes !== undefined) ? String(opts.reminder_minutes) : '';
         var rule = opts.recurrence_rule || 'none';
         document.getElementById('calEvRecurrenceRule').value = rule;
@@ -1101,6 +1138,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 reminder_minutes: ext.reminder_minutes,
                 is_reminder: !!ext.is_reminder,
                 is_public: !!ext.is_public,
+                allow_registration: !!ext.allow_registration,
+                instructor_ref: ext.instructor_ref || '',
+                max_participants: ext.max_participants || '',
+                registration_count: ext.registration_count || 0,
                 recurrence_rule: ext.recurrence_rule || 'none',
                 recurrence_interval: ext.recurrence_interval || 1,
                 recurrence_until: ext.recurrence_until || '',
