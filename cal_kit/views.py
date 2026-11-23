@@ -338,6 +338,7 @@ def _event_registration_count(event_id: int) -> int:
                 custom_data_json__event_id=str(event_id),
             )
             .exclude(status__iexact="Abgelehnt")
+            .exclude(status__iexact="Abgesagt")
             .count()
         )
     except Exception:
