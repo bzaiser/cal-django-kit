@@ -286,12 +286,35 @@ def events_json_view(request):
 
 def _get_domain_instructors():
     if not apps.is_installed("domain_kit"):
-        return []
+        return {"lead": [], "other": []}
     try:
         from domain_kit.models import Person
-        return [{"ref": f"person:{p.id}", "label": p.full_name} for p in Person.objects.order_by("last_name", "first_name")[:200]]
+
+        lead_keywords = ("dozent", "referent", "kursleiter", "trainer", "vorstand", "leitung")
+        lead = []
+        other = []
+        qs = Person.objects.select_related("category").prefetch_related("roles").order_by("last_name", "first_name")[:300]
+        for p in qs:
+            role_names = [r.name for r in p.roles.all()]
+            meta = []
+            if role_names:
+                meta.append(", ".join(role_names))
+            elif p.category:
+                meta.append(p.category.name)
+            if p.email:
+                meta.append(p.email)
+            elif p.company:
+                meta.append(p.company)
+            label = f"{p.full_name} – {' · '.join(meta)}" if meta else p.full_name
+            entry = {"ref": f"person:{p.id}", "label": label}
+            is_lead = any(any(kw in rn.lower() for kw in lead_keywords) for rn in role_names) or bool(p.is_public)
+            if is_lead:
+                lead.append(entry)
+            else:
+                other.append(entry)
+        return {"lead": lead, "other": other}
     except Exception:
-        return []
+        return {"lead": [], "other": []}
 
 
 def _user_instructor_refs(user) -> set[str]:

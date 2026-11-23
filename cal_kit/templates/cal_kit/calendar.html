@@ -535,12 +535,21 @@
                     </div>
                 </div>
                 <div class="row g-2 mb-2">
-                    {% if instructors %}
+                    {% if instructors.lead or instructors.other %}
                     <div class="col-md-7">
                         <label class="form-label small fw-semibold"><i class="bi bi-mortarboard me-1"></i>{% trans "Dozent / Leitung" %}</label>
                         <select name="instructor_ref" id="calEvInstructorRef" class="form-select form-select-sm">
                             <option value="">{% trans "– Keine Leitung –" %}</option>
-                            {% for inst in instructors %}<option value="{{ inst.ref }}">{{ inst.label }}</option>{% endfor %}
+                            {% if instructors.lead %}
+                            <optgroup label="{% trans 'Dozenten & Leitung' %}">
+                                {% for inst in instructors.lead %}<option value="{{ inst.ref }}">{{ inst.label }}</option>{% endfor %}
+                            </optgroup>
+                            {% endif %}
+                            {% if instructors.other %}
+                            <optgroup label="{% trans 'Weitere Personen' %}">
+                                {% for inst in instructors.other %}<option value="{{ inst.ref }}">{{ inst.label }}</option>{% endfor %}
+                            </optgroup>
+                            {% endif %}
                         </select>
                     </div>
                     {% endif %}
