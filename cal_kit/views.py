@@ -169,6 +169,8 @@ def save_event_view(request):
     ev.end_at = end_dt
     ev.all_day = bool(request.POST.get("all_day"))
     ev.is_reminder = bool(request.POST.get("is_reminder"))
+    if "is_public" in request.POST:
+        ev.is_public = bool(request.POST.get("is_public"))
     raw_rem = (request.POST.get("reminder_minutes") or "").strip()
     if raw_rem.isdigit():
         ev.reminder_minutes = min(10080, int(raw_rem))

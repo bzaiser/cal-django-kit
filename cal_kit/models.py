@@ -62,6 +62,7 @@ class CalendarEvent(models.Model):
     reminder_minutes = models.PositiveIntegerField(null=True, blank=True)
     reminder_sent = models.BooleanField(default=False)
     is_reminder = models.BooleanField(default=False)
+    is_public = models.BooleanField(default=False)
     recurrence_rule = models.CharField(
         max_length=16,
         choices=RECURRENCE_CHOICES,
