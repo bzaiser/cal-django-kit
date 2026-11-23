@@ -396,6 +396,17 @@ class CalKitTests(TestCase):
         self_conf = self.client.get(f"/calendar/check-conflict/?start=2026-12-01T19:00&end=2026-12-01T21:00&resource_ref=asset:7&exclude_pk={ev.id}").json()
         self.assertEqual(len(self_conf["conflicts"]), 0)
 
+        # Multi-calendar filter: personal + cat
+        self.client.post("/calendar/save/", {
+            "title": "Privater Termin",
+            "start_at": "2026-12-02T10:00",
+            "end_at": "2026-12-02T11:00",
+        }, HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        multi_json = self.client.get(f"/calendar/events.json?start=2026-12-01T00:00:00Z&end=2026-12-03T00:00:00Z&category=personal,{cat.id}").json()
+        self.assertEqual(len(multi_json), 2)
+        personal_only = self.client.get("/calendar/events.json?start=2026-12-01T00:00:00Z&end=2026-12-03T00:00:00Z&category=personal").json()
+        self.assertEqual([e["title"] for e in personal_only], ["Privater Termin"])
+
     def test_no_missing_migrations(self):
         call_command("makemigrations", "cal_kit", "--check", "--dry-run", verbosity=0)
 

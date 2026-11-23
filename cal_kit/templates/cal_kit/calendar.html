@@ -395,26 +395,28 @@
                 <span class="cal-legend-item"><i class="bi bi-bell-fill text-info"></i> {% trans "Alarm aktiv" %}</span>
                 <span class="cal-legend-item"><i class="bi bi-geo-alt-fill text-success"></i> {% trans "Ort" %}</span>
             </div>
-            {% if categories %}
             <div class="d-flex flex-wrap gap-1 align-items-center" id="calCategoryFilter">
-                <button type="button" class="btn btn-sm rounded-pill px-3 btn-primary cal-cat-chip active" data-cat="">{% trans "Alle" %}</button>
+                <span class="small fw-semibold text-muted me-1"><i class="bi bi-calendar2-week me-1"></i>{% trans "Kalender:" %}</span>
+                <button type="button" class="btn btn-sm rounded-pill px-3 btn-primary cal-cat-chip-all active" data-cat="">{% trans "Alle" %}</button>
+                {% if categories %}
+                <button type="button" class="btn btn-sm rounded-pill px-3 btn-outline-secondary cal-cat-chip" data-cat="personal" title="{% trans 'Termine ohne Kalender-Zuordnung' %}">{% trans "Persönlich" %}</button>
                 {% for cat in categories %}
                 <button type="button" class="btn btn-sm rounded-pill px-3 btn-outline-secondary cal-cat-chip"
                         data-cat="{{ cat.id }}"
                         style="--cat-color: var(--theme-state-{{ cat.color_state }}, var(--app-primary));"
                         title="{{ cat.name }}">
-                    {% if cat.icon %}<i class="bi {{ cat.icon }} me-1"></i>{% endif %}{{ cat.name }}
+                    <span class="rounded-circle d-inline-block me-1" style="width:8px;height:8px;background:var(--theme-state-{{ cat.color_state }}, var(--app-primary));"></span>{% if cat.icon %}<i class="bi {{ cat.icon }} me-1"></i>{% endif %}{{ cat.name }}{% if cat.is_shared %} <i class="bi bi-people-fill opacity-75 ms-1" title="{% trans 'Team-Kalender' %}"></i>{% endif %}{% if cat.is_public_default %} <i class="bi bi-globe2 opacity-75 ms-1" title="{% trans 'Standardmäßig öffentlich' %}"></i>{% endif %}
                 </button>
                 {% endfor %}
-                <button type="button" class="btn btn-sm btn-link p-0 ms-1 text-muted" id="calManageCatsBtn" title="{% trans 'Kategorien verwalten' %}">
-                    <i class="bi bi-gear-fill"></i>
+                <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-2 ms-1" id="calManageCatsBtn" title="{% trans 'Kalender & Kategorien verwalten' %}">
+                    <i class="bi bi-sliders me-1"></i>{% trans "Verwalten" %}
                 </button>
+                {% else %}
+                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3" id="calManageCatsBtn">
+                    <i class="bi bi-plus-circle me-1"></i>{% trans "Kalender anlegen (z. B. Vereinstermine)" %}
+                </button>
+                {% endif %}
             </div>
-            {% else %}
-            <button type="button" class="btn btn-sm btn-link p-0 text-muted" id="calManageCatsBtn">
-                <i class="bi bi-tags me-1"></i>{% trans "Kategorien anlegen" %}
-            </button>
-            {% endif %}
         </div>
         <div id="calQuickFilters" class="d-none flex-wrap align-items-center gap-3 small mb-2 pb-2 border-bottom">
             <span class="fw-semibold text-muted"><i class="bi bi-funnel me-1"></i>{% trans "Filter:" %}</span>
@@ -578,7 +580,7 @@
                 </div>
                 {% if categories %}
                 <div class="mb-2">
-                    <label class="form-label small fw-semibold"><i class="bi bi-tags me-1"></i>{% trans "Kategorie" %}</label>
+                    <label class="form-label small fw-semibold"><i class="bi bi-tags me-1"></i>{% trans "Kalender / Kategorie" %}</label>
                     <select name="category" id="calEvCategory" class="form-select form-select-sm">
                         <option value="">{% trans "Keine Kategorie" %}</option>
                         {% for cat in categories %}
@@ -608,7 +610,7 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="bi bi-tags me-2"></i>{% trans "Kalender-Kategorien" %}</h5>
+                <h5 class="modal-title"><i class="bi bi-tags me-2"></i>{% trans "Kalender & Kategorien" %}</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
@@ -753,17 +755,48 @@ document.addEventListener('DOMContentLoaded', function () {
         toggleWeekdayRow(this.value);
     });
 
-    // ── Category filter chips ─────────────────────────────────────────
+    // ── Multi-calendar filter chips ───────────────────────────────────
     var activeCatFilter = '';
-    document.querySelectorAll('.cal-cat-chip').forEach(function (chip) {
+    var selectedCals = new Set();
+    var allChip = document.querySelector('.cal-cat-chip-all');
+    var calChips = Array.prototype.slice.call(document.querySelectorAll('.cal-cat-chip'));
+
+    function syncCalChips() {
+        var isAll = selectedCals.size === 0;
+        if (allChip) {
+            allChip.classList.toggle('active', isAll);
+            allChip.classList.toggle('btn-primary', isAll);
+            allChip.classList.toggle('btn-outline-secondary', !isAll);
+        }
+        calChips.forEach(function (c) {
+            var on = selectedCals.has(c.dataset.cat);
+            c.classList.toggle('active', on);
+            c.classList.toggle('btn-primary', on);
+            c.classList.toggle('btn-outline-secondary', !on);
+        });
+        activeCatFilter = isAll ? '' : Array.from(selectedCals).join(',');
+        if (typeof calendar !== 'undefined') calendar.refetchEvents();
+    }
+
+    if (allChip) {
+        allChip.addEventListener('click', function () {
+            selectedCals.clear();
+            syncCalChips();
+        });
+    }
+    calChips.forEach(function (chip) {
         chip.addEventListener('click', function () {
-            activeCatFilter = chip.dataset.cat || '';
-            document.querySelectorAll('.cal-cat-chip').forEach(function (c) {
-                c.classList.toggle('active', c === chip);
-                c.classList.toggle('btn-primary', c === chip);
-                c.classList.toggle('btn-outline-secondary', c !== chip);
-            });
-            if (typeof calendar !== 'undefined') calendar.refetchEvents();
+            var val = chip.dataset.cat || '';
+            if (!val) return;
+            if (selectedCals.has(val)) {
+                selectedCals.delete(val);
+            } else {
+                selectedCals.add(val);
+            }
+            if (calChips.length > 0 && selectedCals.size === calChips.length) {
+                selectedCals.clear();
+            }
+            syncCalChips();
         });
     });
 

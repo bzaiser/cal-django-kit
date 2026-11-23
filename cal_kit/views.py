@@ -176,8 +176,22 @@ def events_json_view(request):
     window_start = _parse_dt(start_raw, fallback=timezone.now() - timedelta(days=60))
     window_end = _parse_dt(end_raw, fallback=timezone.now() + timedelta(days=90))
 
-    # Optional category filter
-    cat_id = request.GET.get("category")
+    # Optional multi-calendar filter: comma-separated category IDs and/or "personal"
+    cat_raw = (request.GET.get("category") or "").strip()
+    cat_filter = None
+    if cat_raw:
+        parts = [p.strip() for p in cat_raw.split(",") if p.strip()]
+        cat_ids = [int(p) for p in parts if p.isdigit()]
+        include_personal = "personal" in parts
+        cat_q = Q()
+        if cat_ids:
+            cat_q |= Q(category_id__in=cat_ids)
+        if include_personal:
+            cat_q |= Q(category__isnull=True)
+        if cat_q:
+            cat_filter = cat_q
+        elif parts:
+            cat_filter = Q(pk__in=[])
 
     visible_filter = Q(user=request.user) | Q(category__is_shared=True)
     non_recurring = CalendarEvent.objects.filter(
@@ -191,9 +205,9 @@ def events_json_view(request):
         start_at__lte=window_end,
     ).exclude(recurrence_rule="none").prefetch_related("exceptions").select_related("category").distinct()
 
-    if cat_id:
-        non_recurring = non_recurring.filter(category_id=cat_id)
-        recurring = recurring.filter(category_id=cat_id)
+    if cat_filter is not None:
+        non_recurring = non_recurring.filter(cat_filter)
+        recurring = recurring.filter(cat_filter)
 
     items = []
 
@@ -240,7 +254,7 @@ def events_json_view(request):
             _add_event(ev, occ_start, occ_end, occ_title, occ_id)
 
     # Invoke configured external event providers (e.g. Buckezz list items) when no specific category filter is active
-    if not cat_id:
+    if not cat_raw:
         providers = getattr(settings, "CAL_KIT_EVENT_PROVIDERS", [])
         for prov in providers:
             try:
