@@ -554,8 +554,11 @@
                     </div>
                     {% endif %}
                     <div class="col-md-5">
-                        <label class="form-label small fw-semibold">{% trans "Max. Teilnehmer" %} <span id="calEvRegBadge" class="badge text-bg-info d-none ms-1"></span></label>
-                        <input type="number" min="1" name="max_participants" id="calEvMaxParticipants" class="form-control form-control-sm" placeholder="unbegrenzt">
+                        <label class="form-label small fw-semibold">{% trans "Max. Teilnehmer" %}</label>
+                        <div class="input-group input-group-sm">
+                            <input type="number" min="1" name="max_participants" id="calEvMaxParticipants" class="form-control form-control-sm" placeholder="unbegrenzt">
+                            <span id="calEvRegBadge" class="input-group-text d-none small"></span>
+                        </div>
                     </div>
                 </div>
                 <div class="mb-2">
@@ -564,10 +567,21 @@
                     <div class="d-flex flex-wrap gap-1 align-items-center" id="calEvIconSwatches">
                         <button type="button" class="cal-icon-btn active" data-icon="" title="{% trans 'Automatisch' %}">Auto</button>
                         <button type="button" class="cal-icon-btn" data-icon="bi-people-fill" title="{% trans 'Besprechung' %}"><i class="bi bi-people-fill"></i></button>
+                        <button type="button" class="cal-icon-btn" data-icon="bi-briefcase-fill" title="{% trans 'Vorstandssitzung / Gremium' %}"><i class="bi bi-briefcase-fill"></i></button>
+                        <button type="button" class="cal-icon-btn" data-icon="bi-megaphone-fill" title="{% trans 'Versammlung / Info' %}"><i class="bi bi-megaphone-fill"></i></button>
+                        <button type="button" class="cal-icon-btn" data-icon="bi-mortarboard-fill" title="{% trans 'Kurs / Seminar' %}"><i class="bi bi-mortarboard-fill"></i></button>
+                        <button type="button" class="cal-icon-btn" data-icon="bi-easel-fill" title="{% trans 'Workshop / Vortrag' %}"><i class="bi bi-easel-fill"></i></button>
+                        <button type="button" class="cal-icon-btn" data-icon="bi-palette-fill" title="{% trans 'Kunst / Ausstellung' %}"><i class="bi bi-palette-fill"></i></button>
+                        <button type="button" class="cal-icon-btn" data-icon="bi-music-note-beamed" title="{% trans 'Konzert / Kultur' %}"><i class="bi bi-music-note-beamed"></i></button>
+                        <button type="button" class="cal-icon-btn" data-icon="bi-cup-hot-fill" title="{% trans 'Stammtisch / Treff' %}"><i class="bi bi-cup-hot-fill"></i></button>
+                        <button type="button" class="cal-icon-btn" data-icon="bi-trophy-fill" title="{% trans 'Fest / Ehrung / Turnier' %}"><i class="bi bi-trophy-fill"></i></button>
+                        <button type="button" class="cal-icon-btn" data-icon="bi-gift-fill" title="{% trans 'Feier / Jubiläum' %}"><i class="bi bi-gift-fill"></i></button>
+                        <button type="button" class="cal-icon-btn" data-icon="bi-snow" title="{% trans 'Weihnachtsfeier / Winterfest' %}"><i class="bi bi-snow"></i></button>
+                        <button type="button" class="cal-icon-btn" data-icon="bi-cake2-fill" title="{% trans 'Geburtstag' %}"><i class="bi bi-cake2-fill"></i></button>
                         <button type="button" class="cal-icon-btn" data-icon="bi-camera-video-fill" title="{% trans 'Online-Meeting' %}"><i class="bi bi-camera-video-fill"></i></button>
                         <button type="button" class="cal-icon-btn" data-icon="bi-telephone-fill" title="{% trans 'Telefonat' %}"><i class="bi bi-telephone-fill"></i></button>
                         <button type="button" class="cal-icon-btn" data-icon="bi-check2-square" title="{% trans 'Aufgabe' %}"><i class="bi bi-check2-square"></i></button>
-                        <button type="button" class="cal-icon-btn" data-icon="bi-cake2-fill" title="{% trans 'Geburtstag' %}"><i class="bi bi-cake2-fill"></i></button>
+                        <button type="button" class="cal-icon-btn" data-icon="bi-geo-alt-fill" title="{% trans 'Ausflug / Exkursion' %}"><i class="bi bi-geo-alt-fill"></i></button>
                         <button type="button" class="cal-icon-btn" data-icon="bi-airplane-fill" title="{% trans 'Reise' %}"><i class="bi bi-airplane-fill"></i></button>
                         <button type="button" class="cal-icon-btn" data-icon="bi-heart-pulse-fill" title="{% trans 'Arzt / Gesundheit' %}"><i class="bi bi-heart-pulse-fill"></i></button>
                         <button type="button" class="cal-icon-btn" data-icon="bi-star-fill" title="{% trans 'Wichtig' %}"><i class="bi bi-star-fill"></i></button>
