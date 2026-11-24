@@ -490,6 +490,16 @@ class CalKitTests(TestCase):
         self.assertContains(resp, 'value="25.00"')
         self.assertContains(resp, 'value="120.00"')
 
+    def test_offering_edit_form_shows_uploaded_image_and_remove_option(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        img = SimpleUploadedFile("kurs.png", b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR", content_type="image/png")
+        self.client.post("/calendar/offerings/", {"title": "Bildkurs", "image": img})
+        resp = self.client.get("/calendar/offerings/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'name="remove_image"')
+        self.assertContains(resp, "kurs")
+
 
 if __name__ == "__main__":
     from django.test.runner import DiscoverRunner

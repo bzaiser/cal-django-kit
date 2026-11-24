@@ -92,6 +92,16 @@
     <div class="col-md-6">
         <label class="form-label small fw-semibold mb-1">Bild hochladen</label>
         <input type="file" name="image" accept="image/*" class="form-control form-control-sm">
+        {% if o and o.image %}
+        <div class="d-flex align-items-center gap-2 mt-1">
+            <img src="{{ o.image.url }}" alt="{{ o.title }}" class="rounded border object-fit-cover" style="width: 36px; height: 36px;">
+            <span class="small text-muted text-truncate" style="max-width: 160px;">{{ o.image.name }}</span>
+            <div class="form-check ms-auto mb-0">
+                <input type="checkbox" name="remove_image" value="1" id="remImg-{{ o.id }}" class="form-check-input">
+                <label class="form-check-label small text-danger" for="remImg-{{ o.id }}">Entfernen</label>
+            </div>
+        </div>
+        {% endif %}
     </div>
     <div class="col-md-6">
         <label class="form-label small fw-semibold mb-1">oder Bild-URL</label>
