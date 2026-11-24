@@ -39,7 +39,7 @@
                 {% for row in rows %}
                 <tr>
                     <td class="fw-semibold">
-                        <a href="{% url 'cal_kit:calendar' %}?date={{ row.event.start_at|date:'Y-m-d' }}" class="text-decoration-none">{{ row.event.title }}</a>
+                        <a href="{% url 'cal_kit:calendar' %}?date={{ row.event.start_at|date:'Y-m-d' }}&event={{ row.event.id }}" class="text-decoration-none">{{ row.event.title }}</a>
                     </td>
                     <td class="small">{{ row.event.start_at|date:"d.m.Y H:i" }}</td>
                     <td class="small">{{ row.event.instructor_name|default:"—" }}</td>
@@ -49,7 +49,7 @@
                     <td class="small">{{ row.summary.honorarium|floatformat:2 }} €</td>
                     <td class="fw-bold {% if row.summary.net_result >= 0 %}text-success{% else %}text-danger{% endif %}">{{ row.summary.net_result|floatformat:2 }} €</td>
                     <td class="text-end text-nowrap">
-                        <a href="{% url 'cal_kit:calendar' %}?date={{ row.event.start_at|date:'Y-m-d' }}" class="btn btn-sm btn-outline-secondary rounded-pill" title="Im Kalender anzeigen"><i class="bi bi-calendar3"></i></a>
+                        <a href="{% url 'cal_kit:calendar' %}?date={{ row.event.start_at|date:'Y-m-d' }}&event={{ row.event.id }}" class="btn btn-sm btn-outline-secondary rounded-pill" title="Termin im Kalender öffnen"><i class="bi bi-calendar3"></i></a>
                         <a href="{% url 'cal_kit:event_billing' row.event.id %}" class="btn btn-sm btn-outline-primary rounded-pill px-3">Abrechnung</a>
                     </td>
                 </tr>

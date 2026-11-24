@@ -907,10 +907,52 @@ document.addEventListener('DOMContentLoaded', function () {
         if (typeof checkLocationConflict === 'function') checkLocationConflict();
     }
 
+    var targetEventId = new URLSearchParams(window.location.search).get('event');
+    function openCalendarEventObj(ev) {
+        var ext = ev.extendedProps || {};
+        openModal({
+            pk: ext.master_id || ev.id,
+            occ_id: ev.id,
+            title: ev.title,
+            start: toLocalInput(ev.start),
+            end: toLocalInput(ev.end || ev.start),
+            allDay: ev.allDay,
+            location: ext.location,
+            resource_ref: ext.resource_ref || '',
+            description: ext.description,
+            color_state: ext.color_state || 1,
+            icon: ext.icon || '',
+            reminder_minutes: ext.reminder_minutes,
+            is_reminder: !!ext.is_reminder,
+            is_public: !!ext.is_public,
+            allow_registration: !!ext.allow_registration,
+            instructor_ref: ext.instructor_ref || '',
+            max_participants: ext.max_participants || '',
+            registration_count: ext.registration_count || 0,
+            recurrence_rule: ext.recurrence_rule || 'none',
+            recurrence_interval: ext.recurrence_interval || 1,
+            recurrence_until: ext.recurrence_until || '',
+            recurrence_weekdays: ext.recurrence_weekdays || '',
+            is_recurring: !!ext.is_recurring,
+            category_id: ext.category_id || ''
+        });
+    }
+
     var calendar = new FullCalendar.Calendar(calEl, {
         locale: 'de',
         initialView: 'dayGridMonth',
         initialDate: new URLSearchParams(window.location.search).get('date') || undefined,
+        eventsSet: function (events) {
+            if (!targetEventId) return;
+            var match = events.find(function (ev) {
+                var ext = ev.extendedProps || {};
+                return String(ev.id) === String(targetEventId) || String(ext.master_id || '') === String(targetEventId);
+            });
+            if (match) {
+                targetEventId = null;
+                openCalendarEventObj(match);
+            }
+        },
         firstDay: 1,
         height: 'auto',
         selectable: true,
@@ -1148,32 +1190,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
                 return;
             }
-            openModal({
-                pk: ext.master_id || ev.id,
-                occ_id: ev.id,
-                title: ev.title,
-                start: toLocalInput(ev.start),
-                end: toLocalInput(ev.end || ev.start),
-                allDay: ev.allDay,
-                location: ext.location,
-                resource_ref: ext.resource_ref || '',
-                description: ext.description,
-                color_state: ext.color_state || 1,
-                icon: ext.icon || '',
-                reminder_minutes: ext.reminder_minutes,
-                is_reminder: !!ext.is_reminder,
-                is_public: !!ext.is_public,
-                allow_registration: !!ext.allow_registration,
-                instructor_ref: ext.instructor_ref || '',
-                max_participants: ext.max_participants || '',
-                registration_count: ext.registration_count || 0,
-                recurrence_rule: ext.recurrence_rule || 'none',
-                recurrence_interval: ext.recurrence_interval || 1,
-                recurrence_until: ext.recurrence_until || '',
-                recurrence_weekdays: ext.recurrence_weekdays || '',
-                is_recurring: !!ext.is_recurring,
-                category_id: ext.category_id || ''
-            });
+            openCalendarEventObj(ev);
         },
         eventDrop: function (info) {
             var isRecurring = !!(info.event.extendedProps || {}).is_recurring;
