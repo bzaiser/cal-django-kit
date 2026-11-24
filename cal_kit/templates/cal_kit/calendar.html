@@ -441,7 +441,7 @@
 
 <!-- Create / Edit / Delete Event Modal -->
 <div class="modal fade" id="calEventModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
         <form id="calEventForm" method="post" action="{% url 'cal_kit:save_event' %}" class="modal-content">
             {% csrf_token %}
             <input type="hidden" name="pk" id="calEvPk" value="">
@@ -449,191 +449,203 @@
             <input type="hidden" name="form_has_instructor" value="1">
             <input type="hidden" name="form_has_registration" value="1">
             <input type="hidden" name="resource_ref" id="calEvResourceRef" value="">
-            <div class="modal-header">
+            <div class="modal-header py-2">
                 <h5 class="modal-title" id="calModalTitle">{% trans "Neuer Termin" %}</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <div class="mb-2">
-                    <label class="form-label small fw-semibold">{% trans "Titel" %}</label>
-                    <input type="text" name="title" id="calEvTitle" class="form-control form-control-sm" required>
-                </div>
-                <div class="row g-2 mb-2">
-                    <div class="col-6">
-                        <label class="form-label small fw-semibold">{% trans "Start" %}</label>
-                        <input type="datetime-local" name="start_at" id="calEvStart" class="form-control form-control-sm" required>
-                    </div>
-                    <div class="col-6">
-                        <label class="form-label small fw-semibold">{% trans "Ende" %}</label>
-                        <input type="datetime-local" name="end_at" id="calEvEnd" class="form-control form-control-sm">
-                    </div>
-                </div>
-                <div class="mb-2">
-                    <div class="row g-2 align-items-end">
-                        <div class="col-5">
-                            <label class="form-label small fw-semibold"><i class="bi bi-arrow-repeat me-1"></i>{% trans "Wiederholung" %}</label>
-                            <select name="recurrence_rule" id="calEvRecurrenceRule" class="form-select form-select-sm">
-                                <option value="none">{% trans "Keine Wiederholung" %}</option>
-                                <option value="daily">{% trans "Täglich" %}</option>
-                                <option value="weekly">{% trans "Wöchentlich" %}</option>
-                                <option value="monthly">{% trans "Monatlich" %}</option>
-                                <option value="yearly">{% trans "Jährlich" %}</option>
+                <div class="row g-3">
+                    <div class="col-12 col-lg-6 d-flex flex-column gap-2">
+                        <div>
+                            <label class="form-label small fw-semibold mb-1">{% trans "Titel" %}</label>
+                            <input type="text" name="title" id="calEvTitle" class="form-control form-control-sm" required>
+                        </div>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <label class="form-label small fw-semibold mb-1">{% trans "Start" %}</label>
+                                <input type="datetime-local" name="start_at" id="calEvStart" class="form-control form-control-sm" required>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small fw-semibold mb-1">{% trans "Ende" %}</label>
+                                <input type="datetime-local" name="end_at" id="calEvEnd" class="form-control form-control-sm">
+                            </div>
+                        </div>
+                        <div class="row g-2">
+                            {% if categories %}
+                            <div class="col-6">
+                                <label class="form-label small fw-semibold mb-1"><i class="bi bi-tags me-1"></i>{% trans "Kalender / Kategorie" %}</label>
+                                <select name="category" id="calEvCategory" class="form-select form-select-sm">
+                                    <option value="">{% trans "Keine Kategorie" %}</option>
+                                    {% for cat in categories %}
+                                    <option value="{{ cat.id }}" data-public-default="{% if cat.is_public_default %}1{% else %}0{% endif %}">{{ cat.name }}{% if cat.is_shared %} (Team){% endif %}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            {% endif %}
+                            <div class="{% if categories %}col-6{% else %}col-12{% endif %}">
+                                <label class="form-label small fw-semibold mb-1"><i class="bi bi-alarm me-1"></i>{% trans "Erinnerung" %}</label>
+                                <select name="reminder_minutes" id="calEvReminder" class="form-select form-select-sm">
+                                    <option value="">{% trans "Keine Erinnerung" %}</option>
+                                    <option value="0">{% trans "Zum Zeitpunkt des Termins" %}</option>
+                                    <option value="15">{% trans "15 Minuten vorher" %}</option>
+                                    <option value="30">{% trans "30 Minuten vorher" %}</option>
+                                    <option value="60">{% trans "1 Stunde vorher" %}</option>
+                                    <option value="1440">{% trans "1 Tag vorher" %}</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="form-label small fw-semibold mb-1"><i class="bi bi-geo-alt me-1"></i>{% trans "Ort / Raum / Ressource" %}</label>
+                            {% if location_options %}
+                            <select id="calEvLocationSelect" class="form-select form-select-sm mb-1">
+                                <option value="">{% trans "– Freitext / Kein hinterlegter Ort –" %}</option>
+                                {% for opt in location_options %}
+                                <option value="{{ opt.ref }}" data-label="{{ opt.label }}">[{{ opt.group }}] {{ opt.label }}</option>
+                                {% endfor %}
                             </select>
-                        </div>
-                        <div class="col-3">
-                            <label class="form-label small fw-semibold">{% trans "Intervall" %}</label>
-                            <input type="number" name="recurrence_interval" id="calEvInterval" class="form-control form-control-sm" min="1" max="99" value="1">
-                        </div>
-                        <div class="col-4">
-                            <label class="form-label small fw-semibold">{% trans "Bis Datum" %}</label>
-                            <input type="date" name="recurrence_until" id="calEvUntil" class="form-control form-control-sm">
-                        </div>
-                    </div>
-                    <div id="calEvWeekdaysRow" class="mt-2 d-none">
-                        <label class="form-label small fw-semibold">{% trans "Wochentage" %}</label>
-                        <div class="d-flex flex-wrap gap-1">
-                            <input type="hidden" name="recurrence_weekdays" id="calEvWeekdays" value="">
-                            <button type="button" class="cal-icon-btn cal-wd-btn" data-wd="0">Mo</button>
-                            <button type="button" class="cal-icon-btn cal-wd-btn" data-wd="1">Di</button>
-                            <button type="button" class="cal-icon-btn cal-wd-btn" data-wd="2">Mi</button>
-                            <button type="button" class="cal-icon-btn cal-wd-btn" data-wd="3">Do</button>
-                            <button type="button" class="cal-icon-btn cal-wd-btn" data-wd="4">Fr</button>
-                            <button type="button" class="cal-icon-btn cal-wd-btn" data-wd="5">Sa</button>
-                            <button type="button" class="cal-icon-btn cal-wd-btn" data-wd="6">So</button>
-                        </div>
-                    </div>
-                </div>
-                <div class="row g-2 mb-2 align-items-center">
-                    <div class="col-6">
-                        <label class="form-label small fw-semibold d-block">{% trans "Farbe (Design Studio)" %}</label>
-                        <input type="hidden" name="color_state" id="calEvColor" value="1">
-                        <div class="d-flex flex-wrap gap-2 align-items-center" id="calEvColorSwatches">
-                            {% for i in "12345678" %}
-                            <button type="button" class="ds-color-swatch-btn {% if forloop.first %}active{% endif %}"
-                                    data-state="{{ i }}"
-                                    style="background: var(--theme-state-{{ i }}, var(--app-primary, #0d6efd));"
-                                    title="Farbe {{ i }}"></button>
-                            {% endfor %}
-                        </div>
-                    </div>
-                    <div class="col-6 pt-3">
-                        <div class="form-check">
-                            <input type="checkbox" name="all_day" id="calEvAllDay" class="form-check-input">
-                            <label class="form-check-label small" for="calEvAllDay">{% trans "Ganztägig" %}</label>
-                        </div>
-                        <div class="form-check mt-1">
-                            <input type="checkbox" name="is_reminder" id="calEvIsReminder" class="form-check-input">
-                            <label class="form-check-label small" for="calEvIsReminder"><i class="bi bi-bell me-1"></i>{% trans "Als Erinnerung" %}</label>
-                        </div>
-                        <div class="form-check mt-1">
-                            <input type="checkbox" name="is_public" id="calEvIsPublic" class="form-check-input">
-                            <label class="form-check-label small" for="calEvIsPublic"><i class="bi bi-globe2 me-1"></i>{% trans "Auf öffentlicher Webseite" %}</label>
-                        </div>
-                        <div class="form-check mt-1">
-                            <input type="checkbox" name="allow_registration" id="calEvAllowReg" class="form-check-input">
-                            <label class="form-check-label small" for="calEvAllowReg"><i class="bi bi-person-plus me-1"></i>{% trans "Online-Anmeldung erlauben" %}</label>
-                        </div>
-                    </div>
-                </div>
-                <div class="row g-2 mb-2">
-                    {% if instructors.lead or instructors.other %}
-                    <div class="col-md-7">
-                        <label class="form-label small fw-semibold"><i class="bi bi-mortarboard me-1"></i>{% trans "Dozent / Leitung" %}</label>
-                        <select name="instructor_ref" id="calEvInstructorRef" class="form-select form-select-sm">
-                            <option value="">{% trans "– Keine Leitung –" %}</option>
-                            {% if instructors.lead %}
-                            <optgroup label="{% trans 'Dozenten & Leitung' %}">
-                                {% for inst in instructors.lead %}<option value="{{ inst.ref }}">{{ inst.label }}</option>{% endfor %}
-                            </optgroup>
                             {% endif %}
-                            {% if instructors.other %}
-                            <optgroup label="{% trans 'Weitere Personen' %}">
-                                {% for inst in instructors.other %}<option value="{{ inst.ref }}">{{ inst.label }}</option>{% endfor %}
-                            </optgroup>
+                            <input type="text" name="location" id="calEvLocation" class="form-control form-control-sm" placeholder="{% trans 'Ort, Raum oder Adresse eingeben...' %}">
+                            <div id="calConflictWarning" class="alert alert-warning py-2 px-3 small mt-2 mb-0 d-none">
+                                <div class="fw-semibold mb-1"><i class="bi bi-exclamation-triangle-fill me-1"></i>{% trans "Mögliche Doppelbelegung erkannt:" %}</div>
+                                <ul id="calConflictList" class="mb-2 ps-3"></ul>
+                                <div class="form-check mb-0">
+                                    <input type="checkbox" class="form-check-input" id="calAllowConflict">
+                                    <label class="form-check-label fw-semibold" for="calAllowConflict">{% trans "Trotzdem speichern" %}</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="form-label small fw-semibold mb-1">{% trans "Beschreibung" %}</label>
+                            <textarea name="description" id="calEvDesc" class="form-control form-control-sm" rows="3"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="col-12 col-lg-6 d-flex flex-column gap-2">
+                        <div class="border rounded-3 p-2 bg-body-tertiary">
+                            <div class="row g-2 align-items-end">
+                                <div class="col-5">
+                                    <label class="form-label small fw-semibold mb-1"><i class="bi bi-arrow-repeat me-1"></i>{% trans "Wiederholung" %}</label>
+                                    <select name="recurrence_rule" id="calEvRecurrenceRule" class="form-select form-select-sm">
+                                        <option value="none">{% trans "Keine Wiederholung" %}</option>
+                                        <option value="daily">{% trans "Täglich" %}</option>
+                                        <option value="weekly">{% trans "Wöchentlich" %}</option>
+                                        <option value="monthly">{% trans "Monatlich" %}</option>
+                                        <option value="yearly">{% trans "Jährlich" %}</option>
+                                    </select>
+                                </div>
+                                <div class="col-3">
+                                    <label class="form-label small fw-semibold mb-1">{% trans "Intervall" %}</label>
+                                    <input type="number" name="recurrence_interval" id="calEvInterval" class="form-control form-control-sm" min="1" max="99" value="1">
+                                </div>
+                                <div class="col-4">
+                                    <label class="form-label small fw-semibold mb-1">{% trans "Bis Datum" %}</label>
+                                    <input type="date" name="recurrence_until" id="calEvUntil" class="form-control form-control-sm">
+                                </div>
+                            </div>
+                            <div id="calEvWeekdaysRow" class="mt-2 d-none">
+                                <label class="form-label small fw-semibold mb-1">{% trans "Wochentage" %}</label>
+                                <div class="d-flex flex-wrap gap-1">
+                                    <input type="hidden" name="recurrence_weekdays" id="calEvWeekdays" value="">
+                                    <button type="button" class="cal-icon-btn cal-wd-btn" data-wd="0">Mo</button>
+                                    <button type="button" class="cal-icon-btn cal-wd-btn" data-wd="1">Di</button>
+                                    <button type="button" class="cal-icon-btn cal-wd-btn" data-wd="2">Mi</button>
+                                    <button type="button" class="cal-icon-btn cal-wd-btn" data-wd="3">Do</button>
+                                    <button type="button" class="cal-icon-btn cal-wd-btn" data-wd="4">Fr</button>
+                                    <button type="button" class="cal-icon-btn cal-wd-btn" data-wd="5">Sa</button>
+                                    <button type="button" class="cal-icon-btn cal-wd-btn" data-wd="6">So</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row g-2">
+                            {% if instructors.lead or instructors.other %}
+                            <div class="col-md-7">
+                                <label class="form-label small fw-semibold mb-1"><i class="bi bi-mortarboard me-1"></i>{% trans "Dozent / Leitung" %}</label>
+                                <select name="instructor_ref" id="calEvInstructorRef" class="form-select form-select-sm">
+                                    <option value="">{% trans "– Keine Leitung –" %}</option>
+                                    {% if instructors.lead %}
+                                    <optgroup label="{% trans 'Dozenten & Leitung' %}">
+                                        {% for inst in instructors.lead %}<option value="{{ inst.ref }}">{{ inst.label }}</option>{% endfor %}
+                                    </optgroup>
+                                    {% endif %}
+                                    {% if instructors.other %}
+                                    <optgroup label="{% trans 'Weitere Personen' %}">
+                                        {% for inst in instructors.other %}<option value="{{ inst.ref }}">{{ inst.label }}</option>{% endfor %}
+                                    </optgroup>
+                                    {% endif %}
+                                </select>
+                            </div>
                             {% endif %}
-                        </select>
-                    </div>
-                    {% endif %}
-                    <div class="col-md-5">
-                        <label class="form-label small fw-semibold">{% trans "Max. Teilnehmer" %}</label>
-                        <div class="input-group input-group-sm">
-                            <input type="number" min="1" name="max_participants" id="calEvMaxParticipants" class="form-control form-control-sm" placeholder="unbegrenzt">
-                            <span id="calEvRegBadge" class="input-group-text d-none small"></span>
+                            <div class="{% if instructors.lead or instructors.other %}col-md-5{% else %}col-12{% endif %}">
+                                <label class="form-label small fw-semibold mb-1">{% trans "Max. Teilnehmer" %}</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" min="1" name="max_participants" id="calEvMaxParticipants" class="form-control form-control-sm" placeholder="unbegrenzt">
+                                    <span id="calEvRegBadge" class="input-group-text d-none small"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row g-2 align-items-start">
+                            <div class="col-sm-6">
+                                <label class="form-label small fw-semibold d-block mb-1">{% trans "Farbe (Design Studio)" %}</label>
+                                <input type="hidden" name="color_state" id="calEvColor" value="1">
+                                <div class="d-flex flex-wrap gap-2 align-items-center" id="calEvColorSwatches">
+                                    {% for i in "12345678" %}
+                                    <button type="button" class="ds-color-swatch-btn {% if forloop.first %}active{% endif %}"
+                                            data-state="{{ i }}"
+                                            style="background: var(--theme-state-{{ i }}, var(--app-primary, #0d6efd));"
+                                            title="Farbe {{ i }}"></button>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            <div class="col-sm-6">
+                                <div class="form-check">
+                                    <input type="checkbox" name="all_day" id="calEvAllDay" class="form-check-input">
+                                    <label class="form-check-label small" for="calEvAllDay">{% trans "Ganztägig" %}</label>
+                                </div>
+                                <div class="form-check mt-1">
+                                    <input type="checkbox" name="is_reminder" id="calEvIsReminder" class="form-check-input">
+                                    <label class="form-check-label small" for="calEvIsReminder"><i class="bi bi-bell me-1"></i>{% trans "Als Erinnerung" %}</label>
+                                </div>
+                                <div class="form-check mt-1">
+                                    <input type="checkbox" name="is_public" id="calEvIsPublic" class="form-check-input">
+                                    <label class="form-check-label small" for="calEvIsPublic"><i class="bi bi-globe2 me-1"></i>{% trans "Auf öffentlicher Webseite" %}</label>
+                                </div>
+                                <div class="form-check mt-1">
+                                    <input type="checkbox" name="allow_registration" id="calEvAllowReg" class="form-check-input">
+                                    <label class="form-check-label small" for="calEvAllowReg"><i class="bi bi-person-plus me-1"></i>{% trans "Online-Anmeldung erlauben" %}</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="form-label small fw-semibold d-block mb-1">{% trans "Symbol (Outlook-Stil)" %}</label>
+                            <input type="hidden" name="icon" id="calEvIcon" value="">
+                            <div class="d-flex flex-wrap gap-1 align-items-center" id="calEvIconSwatches">
+                                <button type="button" class="cal-icon-btn active" data-icon="" title="{% trans 'Automatisch' %}">Auto</button>
+                                <button type="button" class="cal-icon-btn" data-icon="bi-people-fill" title="{% trans 'Besprechung' %}"><i class="bi bi-people-fill"></i></button>
+                                <button type="button" class="cal-icon-btn" data-icon="bi-briefcase-fill" title="{% trans 'Vorstandssitzung / Gremium' %}"><i class="bi bi-briefcase-fill"></i></button>
+                                <button type="button" class="cal-icon-btn" data-icon="bi-megaphone-fill" title="{% trans 'Versammlung / Info' %}"><i class="bi bi-megaphone-fill"></i></button>
+                                <button type="button" class="cal-icon-btn" data-icon="bi-mortarboard-fill" title="{% trans 'Kurs / Seminar' %}"><i class="bi bi-mortarboard-fill"></i></button>
+                                <button type="button" class="cal-icon-btn" data-icon="bi-easel-fill" title="{% trans 'Workshop / Vortrag' %}"><i class="bi bi-easel-fill"></i></button>
+                                <button type="button" class="cal-icon-btn" data-icon="bi-palette-fill" title="{% trans 'Kunst / Ausstellung' %}"><i class="bi bi-palette-fill"></i></button>
+                                <button type="button" class="cal-icon-btn" data-icon="bi-music-note-beamed" title="{% trans 'Konzert / Kultur' %}"><i class="bi bi-music-note-beamed"></i></button>
+                                <button type="button" class="cal-icon-btn" data-icon="bi-cup-hot-fill" title="{% trans 'Stammtisch / Treff' %}"><i class="bi bi-cup-hot-fill"></i></button>
+                                <button type="button" class="cal-icon-btn" data-icon="bi-trophy-fill" title="{% trans 'Fest / Ehrung / Turnier' %}"><i class="bi bi-trophy-fill"></i></button>
+                                <button type="button" class="cal-icon-btn" data-icon="bi-gift-fill" title="{% trans 'Feier / Jubiläum' %}"><i class="bi bi-gift-fill"></i></button>
+                                <button type="button" class="cal-icon-btn" data-icon="bi-snow" title="{% trans 'Weihnachtsfeier / Winterfest' %}"><i class="bi bi-snow"></i></button>
+                                <button type="button" class="cal-icon-btn" data-icon="bi-cake2-fill" title="{% trans 'Geburtstag' %}"><i class="bi bi-cake2-fill"></i></button>
+                                <button type="button" class="cal-icon-btn" data-icon="bi-camera-video-fill" title="{% trans 'Online-Meeting' %}"><i class="bi bi-camera-video-fill"></i></button>
+                                <button type="button" class="cal-icon-btn" data-icon="bi-telephone-fill" title="{% trans 'Telefonat' %}"><i class="bi bi-telephone-fill"></i></button>
+                                <button type="button" class="cal-icon-btn" data-icon="bi-check2-square" title="{% trans 'Aufgabe' %}"><i class="bi bi-check2-square"></i></button>
+                                <button type="button" class="cal-icon-btn" data-icon="bi-geo-alt-fill" title="{% trans 'Ausflug / Exkursion' %}"><i class="bi bi-geo-alt-fill"></i></button>
+                                <button type="button" class="cal-icon-btn" data-icon="bi-airplane-fill" title="{% trans 'Reise' %}"><i class="bi bi-airplane-fill"></i></button>
+                                <button type="button" class="cal-icon-btn" data-icon="bi-heart-pulse-fill" title="{% trans 'Arzt / Gesundheit' %}"><i class="bi bi-heart-pulse-fill"></i></button>
+                                <button type="button" class="cal-icon-btn" data-icon="bi-star-fill" title="{% trans 'Wichtig' %}"><i class="bi bi-star-fill"></i></button>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <div class="mb-2">
-                    <label class="form-label small fw-semibold d-block">{% trans "Symbol (Outlook-Stil)" %}</label>
-                    <input type="hidden" name="icon" id="calEvIcon" value="">
-                    <div class="d-flex flex-wrap gap-1 align-items-center" id="calEvIconSwatches">
-                        <button type="button" class="cal-icon-btn active" data-icon="" title="{% trans 'Automatisch' %}">Auto</button>
-                        <button type="button" class="cal-icon-btn" data-icon="bi-people-fill" title="{% trans 'Besprechung' %}"><i class="bi bi-people-fill"></i></button>
-                        <button type="button" class="cal-icon-btn" data-icon="bi-briefcase-fill" title="{% trans 'Vorstandssitzung / Gremium' %}"><i class="bi bi-briefcase-fill"></i></button>
-                        <button type="button" class="cal-icon-btn" data-icon="bi-megaphone-fill" title="{% trans 'Versammlung / Info' %}"><i class="bi bi-megaphone-fill"></i></button>
-                        <button type="button" class="cal-icon-btn" data-icon="bi-mortarboard-fill" title="{% trans 'Kurs / Seminar' %}"><i class="bi bi-mortarboard-fill"></i></button>
-                        <button type="button" class="cal-icon-btn" data-icon="bi-easel-fill" title="{% trans 'Workshop / Vortrag' %}"><i class="bi bi-easel-fill"></i></button>
-                        <button type="button" class="cal-icon-btn" data-icon="bi-palette-fill" title="{% trans 'Kunst / Ausstellung' %}"><i class="bi bi-palette-fill"></i></button>
-                        <button type="button" class="cal-icon-btn" data-icon="bi-music-note-beamed" title="{% trans 'Konzert / Kultur' %}"><i class="bi bi-music-note-beamed"></i></button>
-                        <button type="button" class="cal-icon-btn" data-icon="bi-cup-hot-fill" title="{% trans 'Stammtisch / Treff' %}"><i class="bi bi-cup-hot-fill"></i></button>
-                        <button type="button" class="cal-icon-btn" data-icon="bi-trophy-fill" title="{% trans 'Fest / Ehrung / Turnier' %}"><i class="bi bi-trophy-fill"></i></button>
-                        <button type="button" class="cal-icon-btn" data-icon="bi-gift-fill" title="{% trans 'Feier / Jubiläum' %}"><i class="bi bi-gift-fill"></i></button>
-                        <button type="button" class="cal-icon-btn" data-icon="bi-snow" title="{% trans 'Weihnachtsfeier / Winterfest' %}"><i class="bi bi-snow"></i></button>
-                        <button type="button" class="cal-icon-btn" data-icon="bi-cake2-fill" title="{% trans 'Geburtstag' %}"><i class="bi bi-cake2-fill"></i></button>
-                        <button type="button" class="cal-icon-btn" data-icon="bi-camera-video-fill" title="{% trans 'Online-Meeting' %}"><i class="bi bi-camera-video-fill"></i></button>
-                        <button type="button" class="cal-icon-btn" data-icon="bi-telephone-fill" title="{% trans 'Telefonat' %}"><i class="bi bi-telephone-fill"></i></button>
-                        <button type="button" class="cal-icon-btn" data-icon="bi-check2-square" title="{% trans 'Aufgabe' %}"><i class="bi bi-check2-square"></i></button>
-                        <button type="button" class="cal-icon-btn" data-icon="bi-geo-alt-fill" title="{% trans 'Ausflug / Exkursion' %}"><i class="bi bi-geo-alt-fill"></i></button>
-                        <button type="button" class="cal-icon-btn" data-icon="bi-airplane-fill" title="{% trans 'Reise' %}"><i class="bi bi-airplane-fill"></i></button>
-                        <button type="button" class="cal-icon-btn" data-icon="bi-heart-pulse-fill" title="{% trans 'Arzt / Gesundheit' %}"><i class="bi bi-heart-pulse-fill"></i></button>
-                        <button type="button" class="cal-icon-btn" data-icon="bi-star-fill" title="{% trans 'Wichtig' %}"><i class="bi bi-star-fill"></i></button>
-                    </div>
-                </div>
-                <div class="mb-2">
-                    <label class="form-label small fw-semibold"><i class="bi bi-alarm me-1"></i>{% trans "Erinnerung" %}</label>
-                    <select name="reminder_minutes" id="calEvReminder" class="form-select form-select-sm">
-                        <option value="">{% trans "Keine Erinnerung" %}</option>
-                        <option value="0">{% trans "Zum Zeitpunkt des Termins" %}</option>
-                        <option value="15">{% trans "15 Minuten vorher" %}</option>
-                        <option value="30">{% trans "30 Minuten vorher" %}</option>
-                        <option value="60">{% trans "1 Stunde vorher" %}</option>
-                        <option value="1440">{% trans "1 Tag vorher" %}</option>
-                    </select>
-                </div>
-                <div class="mb-2">
-                    <label class="form-label small fw-semibold"><i class="bi bi-geo-alt me-1"></i>{% trans "Ort / Raum / Ressource" %}</label>
-                    {% if location_options %}
-                    <select id="calEvLocationSelect" class="form-select form-select-sm mb-1">
-                        <option value="">{% trans "– Freitext / Kein hinterlegter Ort –" %}</option>
-                        {% for opt in location_options %}
-                        <option value="{{ opt.ref }}" data-label="{{ opt.label }}">[{{ opt.group }}] {{ opt.label }}</option>
-                        {% endfor %}
-                    </select>
-                    {% endif %}
-                    <input type="text" name="location" id="calEvLocation" class="form-control form-control-sm" placeholder="{% trans 'Ort, Raum oder Adresse eingeben...' %}">
-                    <div id="calConflictWarning" class="alert alert-warning py-2 px-3 small mt-2 mb-0 d-none">
-                        <div class="fw-semibold mb-1"><i class="bi bi-exclamation-triangle-fill me-1"></i>{% trans "Mögliche Doppelbelegung erkannt:" %}</div>
-                        <ul id="calConflictList" class="mb-2 ps-3"></ul>
-                        <div class="form-check mb-0">
-                            <input type="checkbox" class="form-check-input" id="calAllowConflict">
-                            <label class="form-check-label fw-semibold" for="calAllowConflict">{% trans "Trotzdem speichern" %}</label>
-                        </div>
-                    </div>
-                </div>
-                <div class="mb-2">
-                    <label class="form-label small fw-semibold">{% trans "Beschreibung" %}</label>
-                    <textarea name="description" id="calEvDesc" class="form-control form-control-sm" rows="2"></textarea>
-                </div>
-                {% if categories %}
-                <div class="mb-2">
-                    <label class="form-label small fw-semibold"><i class="bi bi-tags me-1"></i>{% trans "Kalender / Kategorie" %}</label>
-                    <select name="category" id="calEvCategory" class="form-select form-select-sm">
-                        <option value="">{% trans "Keine Kategorie" %}</option>
-                        {% for cat in categories %}
-                        <option value="{{ cat.id }}" data-public-default="{% if cat.is_public_default %}1{% else %}0{% endif %}">{{ cat.name }}{% if cat.is_shared %} (Team){% endif %}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                {% endif %}
             </div>
             <div class="modal-footer justify-content-between">
                 <button type="button" id="calDeleteBtn" class="btn btn-sm btn-outline-danger rounded-pill px-3 d-none">
