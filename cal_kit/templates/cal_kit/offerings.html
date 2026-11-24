@@ -30,7 +30,7 @@
                         </div>
                         {% if o.instructor_name %}<div class="small text-primary fw-semibold">{{ cal_labels.instructor_label }}: {{ o.instructor_name }}</div>{% endif %}
                         {% if o.responsible_name %}<div class="small text-muted">{{ cal_labels.responsible_label }}: {{ o.responsible_name }}</div>{% endif %}
-                        {% if o.description %}<p class="small text-muted mt-2 mb-1">{{ o.description|truncatechars:180 }}</p>{% endif %}
+                        {% if o.description %}<p class="small text-muted mt-2 mb-1">{{ o.description|striptags|truncatechars:180 }}</p>{% endif %}
                         <div class="d-flex flex-wrap gap-2 small mt-2">
                             {% if o.fee_amount is not None %}<span class="badge bg-body-secondary text-body border">{{ cal_labels.fee_label }}: {{ o.fee_amount }} €</span>{% endif %}
                             {% if o.honorarium_amount is not None %}<span class="badge bg-body-secondary text-body border">Honorar: {{ o.honorarium_amount }} €</span>{% endif %}
@@ -152,4 +152,36 @@
         </form>
     </div>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.cal-offering-wysiwyg-wrap').forEach(function (wrap) {
+        var ed = wrap.querySelector('.cal-offering-ed');
+        var ta = wrap.querySelector('.cal-offering-desc-input');
+        var tb = wrap.querySelector('.cal-offering-tb');
+        if (!ed || !ta) return;
+        var raw = ta.value || '';
+        if (/<[a-z][\s\S]*>/i.test(raw)) ed.innerHTML = raw;
+        else ed.innerHTML = raw.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+        function sync() { ta.value = ed.innerHTML.trim(); }
+        ed.addEventListener('input', sync);
+        var form = wrap.closest('form');
+        if (form) form.addEventListener('submit', sync);
+        if (tb) {
+            tb.querySelectorAll('button[data-cmd]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var cmd = btn.getAttribute('data-cmd');
+                    ed.focus();
+                    if (cmd === 'createLink') {
+                        var url = window.prompt('Link-URL eingeben (z. B. https://...):');
+                        if (url) document.execCommand('createLink', false, url);
+                    } else {
+                        document.execCommand(cmd, false, null);
+                    }
+                    sync();
+                });
+            });
+        }
+    });
+});
+</script>
 {% endblock %}
