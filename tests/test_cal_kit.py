@@ -472,6 +472,24 @@ class CalKitTests(TestCase):
         self.assertEqual(r_none.status_code, 200)
         self.assertEqual(CalendarEvent.objects.get(title="Ohne Icon Termin").icon, "none")
 
+    def test_offering_edit_form_unlocalizes_decimal_fields_in_de(self):
+        from django.test import override_settings
+
+        self.client.post("/calendar/offerings/", {
+            "title": "Ölmalerei",
+            "fee_amount": "35.00",
+            "fee_non_member": "50.00",
+            "fee_reduced": "25.00",
+            "honorarium_amount": "120.00",
+        })
+        with override_settings(LANGUAGE_CODE="de"):
+            resp = self.client.get("/calendar/offerings/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'value="35.00"')
+        self.assertContains(resp, 'value="50.00"')
+        self.assertContains(resp, 'value="25.00"')
+        self.assertContains(resp, 'value="120.00"')
+
 
 if __name__ == "__main__":
     from django.test.runner import DiscoverRunner
