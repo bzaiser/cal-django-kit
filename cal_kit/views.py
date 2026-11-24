@@ -49,7 +49,20 @@ def _get_domain_location_options() -> list[dict]:
         pass
     try:
         Address = apps.get_model("domain_kit", "Address")
-        for a in Address.objects.all().order_by("label", "city", "street"):
+        addr_qs = (
+            Address.objects.select_related("category")
+            .filter(
+                Q(person__isnull=True)
+                | Q(category__purpose="location")
+                | Q(category__name__icontains="standort")
+                | Q(category__name__icontains="veranstaltung")
+                | Q(category__name__icontains="verein")
+            )
+            .exclude(Q(person__isnull=False) & Q(category__name__icontains="privat"))
+            .distinct()
+            .order_by("label", "city", "street")
+        )
+        for a in addr_qs:
             addr_parts = [p for p in [a.street, f"{a.postal_code} {a.city}".strip()] if p]
             addr_txt = ", ".join(addr_parts)
             lbl = f"{a.label}: {addr_txt}" if a.label and addr_txt else (addr_txt or a.label)
