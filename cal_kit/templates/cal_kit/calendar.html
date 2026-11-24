@@ -442,7 +442,7 @@
 <!-- Create / Edit / Delete Event Modal -->
 <div class="modal fade" id="calEventModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
-        <form id="calEventForm" method="post" action="{% url 'cal_kit:save_event' %}" class="modal-content">
+        <form id="calEventForm" method="post" action="{% url 'cal_kit:save_event' %}" enctype="multipart/form-data" class="modal-content">
             {% csrf_token %}
             <input type="hidden" name="pk" id="calEvPk" value="">
             <input type="hidden" name="form_has_public_flag" value="1">
@@ -518,6 +518,31 @@
                             <label class="form-label small fw-semibold mb-1">{% trans "Beschreibung" %}</label>
                             <textarea name="description" id="calEvDesc" class="form-control form-control-sm" rows="3"></textarea>
                         </div>
+                        <details id="calEvMediaDetails" class="border rounded-3 p-2 bg-body-tertiary">
+                            <summary class="small fw-semibold" style="cursor: pointer;"><i class="bi bi-image me-1 text-primary"></i>{% trans "Vorlage & Bild für Webseite (optional)" %}</summary>
+                            <div class="d-flex flex-column gap-2 mt-2">
+                                <div>
+                                    <label class="form-label small mb-1">{% trans "Angebots-Vorlage verknüpfen" %}</label>
+                                    <select name="offering_template_id" id="calEvOfferingTemplate" class="form-select form-select-sm">
+                                        <option value="">{% trans "— Keine Vorlage —" %}</option>
+                                        {% for ot in offering_templates %}
+                                        <option value="{{ ot.id }}" data-desc="{{ ot.description|escape }}" data-loc="{{ ot.default_location|escape }}" data-max="{{ ot.default_max_participants|default:'' }}" data-img="{{ ot.resolved_image_url|escape }}">{{ ot.title }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="form-label small mb-1">{% trans "Eigenes Termin-Bild (überschreibt Vorlagen-Bild)" %}</label>
+                                    <input type="file" name="image" id="calEvImageInput" accept="image/*" class="form-control form-control-sm">
+                                    <div id="calEvImagePreviewWrap" class="d-none mt-2 d-flex align-items-center justify-content-between gap-2 border rounded-2 p-2 bg-body">
+                                        <img id="calEvImagePreview" src="" alt="" class="rounded-2 object-fit-cover" style="width: 60px; height: 42px;">
+                                        <div class="form-check mb-0" id="calEvRemoveImageWrap">
+                                            <input type="checkbox" name="remove_image" value="1" id="calEvRemoveImage" class="form-check-input">
+                                            <label class="form-check-label small text-danger" for="calEvRemoveImage">{% trans "Eigenes Bild entfernen" %}</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </details>
                     </div>
 
                     <div class="col-12 col-lg-6 d-flex flex-column gap-2">
@@ -903,6 +928,22 @@ document.addEventListener('DOMContentLoaded', function () {
         var allowChk = document.getElementById('calAllowConflict');
         if (allowChk) allowChk.checked = false;
         document.getElementById('calEvDesc').value = opts.description || '';
+        var otEl = document.getElementById('calEvOfferingTemplate');
+        if (otEl) otEl.value = opts.offering_template_id ? String(opts.offering_template_id) : '';
+        var imgInp = document.getElementById('calEvImageInput');
+        if (imgInp) imgInp.value = '';
+        var rmImg = document.getElementById('calEvRemoveImage');
+        if (rmImg) rmImg.checked = false;
+        var rmWrap = document.getElementById('calEvRemoveImageWrap');
+        if (rmWrap) rmWrap.classList.toggle('d-none', !opts.has_own_image);
+        var prevWrap = document.getElementById('calEvImagePreviewWrap');
+        var prevImg = document.getElementById('calEvImagePreview');
+        if (prevWrap && prevImg) {
+            if (opts.image_url) { prevImg.src = opts.image_url; prevWrap.classList.remove('d-none'); }
+            else { prevImg.src = ''; prevWrap.classList.add('d-none'); }
+        }
+        var det = document.getElementById('calEvMediaDetails');
+        if (det) det.open = !!(opts.offering_template_id || opts.image_url);
         var catEl = document.getElementById('calEvCategory');
         if (catEl) catEl.value = opts.category_id ? String(opts.category_id) : '';
         setCalColor(opts.color_state || 1);
@@ -939,6 +980,9 @@ document.addEventListener('DOMContentLoaded', function () {
             is_reminder: !!ext.is_reminder,
             is_public: !!ext.is_public,
             allow_registration: !!ext.allow_registration,
+            offering_template_id: ext.offering_template_id || '',
+            image_url: ext.image_url || '',
+            has_own_image: !!ext.has_own_image,
             instructor_ref: ext.instructor_ref || '',
             max_participants: ext.max_participants || '',
             registration_count: ext.registration_count || 0,

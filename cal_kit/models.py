@@ -137,6 +137,7 @@ class CalendarEvent(models.Model):
     allow_registration = models.BooleanField(default=False)
     max_participants = models.PositiveIntegerField(null=True, blank=True)
     description = models.TextField(blank=True, default="")
+    image = models.FileField(upload_to="cal_kit/events/%Y/%m/", blank=True, null=True)
     color_state = models.PositiveSmallIntegerField(default=1)
     icon = models.CharField(max_length=40, blank=True, default="")
     reminder_minutes = models.PositiveIntegerField(null=True, blank=True)
@@ -160,6 +161,17 @@ class CalendarEvent(models.Model):
 
     def __str__(self):
         return f"{self.title} ({self.start_at:%Y-%m-%d})"
+
+    @property
+    def resolved_image_url(self) -> str:
+        if self.image:
+            try:
+                return self.image.url
+            except Exception:
+                pass
+        if self.offering_template_id and self.offering_template:
+            return self.offering_template.resolved_image_url
+        return ""
 
     @property
     def is_recurring(self) -> bool:

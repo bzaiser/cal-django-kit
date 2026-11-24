@@ -156,6 +156,7 @@ def calendar_view(request):
         "categories": categories,
         "location_options": location_options,
         "instructors": instructors,
+        "offering_templates": OfferingTemplate.objects.order_by("title"),
         "cal_labels": get_cal_profile_labels(),
         "cal_active_tab": "calendar",
     })
@@ -258,6 +259,9 @@ def events_json_view(request):
                 "recurrence_weekdays": ev.recurrence_weekdays,
                 "category_id": ev.category_id,
                 "category_name": ev.category.name if ev.category else "",
+                "offering_template_id": ev.offering_template_id,
+                "image_url": ev.resolved_image_url,
+                "has_own_image": bool(ev.image),
                 "read_only": (
                     ev.user_id != request.user.id
                     and not _has_shared_editor_access(request.user)
@@ -436,6 +440,11 @@ def save_event_view(request):
         raw_mp = (request.POST.get("max_participants") or "").strip()
         ev.max_participants = int(raw_mp) if raw_mp.isdigit() and int(raw_mp) > 0 else None
     ev.description = (request.POST.get("description") or "").strip()
+    if request.POST.get("remove_image") == "1" and ev.image:
+        ev.image.delete(save=False)
+        ev.image = None
+    if "image" in request.FILES:
+        ev.image = request.FILES["image"]
     try:
         ev.color_state = max(1, min(8, int(request.POST.get("color_state") or 1)))
     except (TypeError, ValueError):

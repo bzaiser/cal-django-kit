@@ -1,9 +1,11 @@
+import os
 from django.apps import AppConfig
 
 
 class CalKitConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "cal_kit"
+    path = os.path.dirname(os.path.abspath(__file__))
     verbose_name = "Calendar & Sync Kit"
 
     def ready(self):
