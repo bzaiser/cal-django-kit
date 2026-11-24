@@ -1,3 +1,4 @@
+import csv
 from datetime import datetime, timedelta
 import json
 import logging
@@ -15,7 +16,14 @@ from django.utils.translation import gettext as _
 from django.views.decorators.http import require_POST
 
 from .ical import events_to_ics
-from .models import RECURRENCE_CHOICES, CalendarCategory, CalendarEvent, CalendarEventException
+from .models import RECURRENCE_CHOICES, CalendarCategory, CalendarEvent, CalendarEventException, OfferingTemplate
+from .services import (
+    get_cal_profile_labels,
+    get_contract_options,
+    get_event_billing_summary,
+    parse_decimal_or_none,
+    resolve_person_name,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -148,6 +156,8 @@ def calendar_view(request):
         "categories": categories,
         "location_options": location_options,
         "instructors": instructors,
+        "cal_labels": get_cal_profile_labels(),
+        "cal_active_tab": "calendar",
     })
 
 
@@ -406,6 +416,20 @@ def save_event_view(request):
             except Exception:
                 pass
         ev.instructor_name = iname
+    if "responsible_ref" in request.POST or "responsible_name" in request.POST:
+        rref = (request.POST.get("responsible_ref") or "").strip()[:64]
+        ev.responsible_ref = rref
+        rname = (request.POST.get("responsible_name") or "").strip()[:140]
+        if rref.startswith("person:") and not rname:
+            rname = resolve_person_name(rref)
+        ev.responsible_name = rname
+    if "contract_ref" in request.POST:
+        ev.contract_ref = (request.POST.get("contract_ref") or "").strip()[:64]
+    if "fee_amount" in request.POST:
+        ev.fee_amount = parse_decimal_or_none(request.POST.get("fee_amount"))
+    if "offering_template_id" in request.POST:
+        otid = (request.POST.get("offering_template_id") or "").strip()
+        ev.offering_template = OfferingTemplate.objects.filter(pk=int(otid)).first() if otid.isdigit() else None
     if "allow_registration" in request.POST or "form_has_registration" in request.POST:
         ev.allow_registration = bool(request.POST.get("allow_registration"))
     if "max_participants" in request.POST:
@@ -632,3 +656,202 @@ def delete_category_view(request, pk):
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
         return JsonResponse({"status": "ok"})
     return redirect("cal_kit:calendar")
+
+
+# ── Offerings & Billing ────────────────────────────────────────────────────────
+
+@login_required
+def offering_list_view(request):
+    cal_labels = get_cal_profile_labels()
+    can_manage = _has_shared_editor_access(request.user) or getattr(request.user, "is_staff", False)
+    if request.method == "POST":
+        pk = (request.POST.get("pk") or "").strip()
+        if pk:
+            tpl = get_object_or_404(OfferingTemplate, pk=pk)
+            if tpl.user_id != request.user.id and not can_manage:
+                return HttpResponse("Kein Zugriff.", status=403)
+        else:
+            tpl = OfferingTemplate(user=request.user)
+
+        tpl.title = (request.POST.get("title") or "").strip()[:160] or "Angebot"
+        cat_id = (request.POST.get("category") or "").strip()
+        tpl.category = CalendarCategory.objects.filter(pk=int(cat_id)).first() if cat_id.isdigit() else None
+        tpl.description = (request.POST.get("description") or "").strip()
+        tpl.bring_along_note = (request.POST.get("bring_along_note") or "").strip()
+        tpl.material_note = (request.POST.get("material_note") or "").strip()[:200]
+        tpl.default_location = (request.POST.get("default_location") or "").strip()[:140]
+        try:
+            tpl.default_duration_minutes = max(15, min(1440, int(request.POST.get("default_duration_minutes") or 120)))
+        except (TypeError, ValueError):
+            tpl.default_duration_minutes = 120
+        raw_min = (request.POST.get("min_participants") or "").strip()
+        tpl.min_participants = int(raw_min) if raw_min.isdigit() and int(raw_min) > 0 else None
+        raw_max = (request.POST.get("max_participants") or "").strip()
+        tpl.max_participants = int(raw_max) if raw_max.isdigit() and int(raw_max) > 0 else None
+
+        iref = (request.POST.get("instructor_ref") or "").strip()[:64]
+        tpl.instructor_ref = iref
+        tpl.instructor_name = (request.POST.get("instructor_name") or "").strip()[:140] or resolve_person_name(iref)
+
+        rref = (request.POST.get("responsible_ref") or "").strip()[:64]
+        tpl.responsible_ref = rref
+        tpl.responsible_name = (request.POST.get("responsible_name") or "").strip()[:140] or resolve_person_name(rref)
+
+        tpl.contract_ref = (request.POST.get("contract_ref") or "").strip()[:64]
+        tpl.fee_amount = parse_decimal_or_none(request.POST.get("fee_amount"))
+        tpl.fee_non_member = parse_decimal_or_none(request.POST.get("fee_non_member"))
+        tpl.fee_reduced = parse_decimal_or_none(request.POST.get("fee_reduced"))
+        tpl.honorarium_amount = parse_decimal_or_none(request.POST.get("honorarium_amount"))
+        if tpl.honorarium_amount is None and tpl.contract_ref.startswith("contract:") and apps.is_installed("domain_kit"):
+            try:
+                from domain_kit.models import AssetItem
+                c_obj = AssetItem.objects.filter(pk=int(tpl.contract_ref.split(":", 1)[1])).first()
+                if c_obj and c_obj.quantity:
+                    tpl.honorarium_amount = c_obj.quantity
+            except Exception:
+                pass
+        tpl.show_in_program = bool(request.POST.get("show_in_program"))
+        if request.FILES.get("image"):
+            tpl.image = request.FILES["image"]
+        elif request.POST.get("remove_image") == "1":
+            tpl.image = None
+        if "image_url" in request.POST:
+            tpl.image_url = (request.POST.get("image_url") or "").strip()[:200]
+        tpl.save()
+        messages.success(request, f"{cal_labels['offering_singular']} „{tpl.title}“ gespeichert.")
+        return redirect("cal_kit:offering_list")
+
+    qs = OfferingTemplate.objects.select_related("category", "user").prefetch_related("events")
+    if not can_manage:
+        qs = qs.filter(user=request.user)
+    categories = CalendarCategory.objects.filter(Q(user=request.user) | Q(is_shared=True)).distinct()
+    return render(request, "cal_kit/offerings.html", {
+        "offerings": qs,
+        "categories": categories,
+        "instructors": _get_domain_instructors(),
+        "location_options": _get_domain_location_options(),
+        "contract_options": get_contract_options(),
+        "cal_labels": cal_labels,
+        "cal_active_tab": "offerings",
+    })
+
+
+@login_required
+@require_POST
+def offering_create_event_view(request, pk):
+    tpl = get_object_or_404(OfferingTemplate, pk=pk)
+    start_dt = _parse_dt(request.POST.get("start_at") or "")
+    if not start_dt:
+        start_dt = timezone.now().replace(minute=0, second=0, microsecond=0) + timedelta(days=7)
+    end_dt = _parse_dt(request.POST.get("end_at") or "")
+    if not end_dt or end_dt <= start_dt:
+        end_dt = start_dt + timedelta(minutes=tpl.default_duration_minutes or 120)
+
+    ev = CalendarEvent.objects.create(
+        user=request.user,
+        category=tpl.category,
+        offering_template=tpl,
+        title=(request.POST.get("title") or tpl.title)[:140],
+        start_at=start_dt,
+        end_at=end_dt,
+        location=(request.POST.get("location") or tpl.default_location)[:140],
+        instructor_ref=tpl.instructor_ref,
+        instructor_name=tpl.instructor_name,
+        responsible_ref=tpl.responsible_ref,
+        responsible_name=tpl.responsible_name,
+        contract_ref=tpl.contract_ref,
+        fee_amount=tpl.fee_amount,
+        max_participants=tpl.max_participants,
+        allow_registration=True,
+        is_public=True,
+        description=tpl.description,
+        color_state=tpl.category.color_state if tpl.category else 1,
+    )
+    messages.success(request, f"Termin „{ev.title}“ aus Vorlage erstellt.")
+    return redirect("cal_kit:event_billing", pk=ev.id)
+
+
+@login_required
+@require_POST
+def offering_delete_view(request, pk):
+    tpl = get_object_or_404(OfferingTemplate, pk=pk)
+    if tpl.user_id != request.user.id and not _has_shared_editor_access(request.user):
+        return HttpResponse("Kein Zugriff.", status=403)
+    tpl.delete()
+    messages.success(request, "Vorlage gelöscht.")
+    return redirect("cal_kit:offering_list")
+
+
+@login_required
+def billing_overview_view(request):
+    cal_labels = get_cal_profile_labels()
+    can_manage = _has_shared_editor_access(request.user) or getattr(request.user, "is_staff", False)
+    qs = CalendarEvent.objects.select_related("category", "offering_template").filter(
+        Q(offering_template__isnull=False) | Q(allow_registration=True)
+    )
+    if not can_manage:
+        irefs = _user_instructor_refs(request.user)
+        q_own = Q(user=request.user)
+        if irefs:
+            q_own |= Q(instructor_ref__in=irefs) | Q(responsible_ref__in=irefs)
+        qs = qs.filter(q_own)
+    rows = []
+    total_expected = 0
+    total_paid = 0
+    total_net = 0
+    for ev in qs.order_by("-start_at")[:100]:
+        summary = get_event_billing_summary(ev)
+        rows.append({"event": ev, "summary": summary})
+        total_expected += summary["expected_revenue"]
+        total_paid += summary["paid_revenue"]
+        total_net += summary["net_result"]
+
+    return render(request, "cal_kit/billing_overview.html", {
+        "rows": rows,
+        "total_expected": total_expected,
+        "total_paid": total_paid,
+        "total_net": total_net,
+        "cal_labels": cal_labels,
+        "cal_active_tab": "billing",
+    })
+
+
+@login_required
+def event_billing_view(request, pk):
+    ev = get_object_or_404(CalendarEvent.objects.select_related("category", "offering_template"), pk=pk)
+    can_manage = _has_shared_editor_access(request.user) or ev.user_id == request.user.id
+    if not can_manage and ev.instructor_ref not in _user_instructor_refs(request.user):
+        return HttpResponse("Kein Zugriff.", status=403)
+    summary = get_event_billing_summary(ev)
+    return render(request, "cal_kit/event_billing.html", {
+        "event": ev,
+        "summary": summary,
+        "cal_labels": get_cal_profile_labels(),
+        "cal_active_tab": "billing",
+    })
+
+
+@login_required
+def event_billing_csv_view(request, pk):
+    ev = get_object_or_404(CalendarEvent.objects.select_related("category", "offering_template"), pk=pk)
+    can_manage = _has_shared_editor_access(request.user) or ev.user_id == request.user.id
+    if not can_manage and ev.instructor_ref not in _user_instructor_refs(request.user):
+        return HttpResponse("Kein Zugriff.", status=403)
+    summary = get_event_billing_summary(ev)
+    resp = HttpResponse(content_type="text/csv; charset=utf-8")
+    resp["Content-Disposition"] = f'attachment; filename="abrechnung-{ev.id}.csv"'
+    resp.write("\ufeff")
+    writer = csv.writer(resp, delimiter=";")
+    writer.writerow(["Name", "E-Mail", "Status", "Bezahlt", "Gebühr (€)"])
+    for e in summary["entries"]:
+        data = e.custom_data_json or {}
+        is_paid = bool(data.get("is_paid"))
+        email = data.get("absender_email") or data.get("email") or ""
+        writer.writerow([
+            data.get("absender_name") or e.title,
+            email,
+            e.status,
+            "Ja" if is_paid else "Nein",
+            f"{summary['fee_per_person']:.2f}" if (e.status or "").lower() not in ("abgesagt", "abgelehnt") else "0.00",
+        ])
+    return resp

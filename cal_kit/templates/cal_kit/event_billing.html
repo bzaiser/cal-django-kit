@@ -1,0 +1,78 @@
+{% extends "design_studio/layouts/base.html" %}
+{% load i18n %}
+
+{% block title %}Abrechnung: {{ event.title }}{% endblock %}
+
+{% block content %}
+{% include "cal_kit/includes/_cal_tabs.html" %}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div>
+        <div class="small text-muted"><a href="{% url 'cal_kit:billing_overview' %}" class="text-decoration-none">{{ cal_labels.billing_tab|default:"Termine & Abrechnung" }}</a> / {{ event.title }}</div>
+        <h3 class="fw-bold mb-0">{{ event.title }}</h3>
+        <div class="small text-muted">{{ event.start_at|date:"d.m.Y H:i" }}{% if event.location %} · {{ event.location }}{% endif %}{% if event.instructor_name %} · {{ event.instructor_name }}{% endif %}</div>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{% url 'cal_kit:event_billing_csv' event.id %}" class="btn btn-sm btn-outline-secondary rounded-pill px-3"><i class="bi bi-filetype-csv me-1"></i>CSV-Export</a>
+        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3" onclick="window.print()"><i class="bi bi-printer me-1"></i>Drucken</button>
+    </div>
+</div>
+
+<div class="kpi-bento-grid mb-4">
+    {% include "design_studio/components/kpi_card.html" with title="Belegte Plätze" value=summary.booked_count unit="TN" icon="bi-people" size="sm" state=1 %}
+    {% include "design_studio/components/kpi_card.html" with title="Soll-Einnahmen" value=summary.expected_revenue|floatformat:2 unit="€" icon="bi-cash" size="sm" state=2 %}
+    {% include "design_studio/components/kpi_card.html" with title="Bezahlt (Ist)" value=summary.paid_revenue|floatformat:2 unit="€" icon="bi-check2-circle" size="sm" state=3 %}
+    {% include "design_studio/components/kpi_card.html" with title="Offen" value=summary.open_revenue|floatformat:2 unit="€" icon="bi-hourglass-split" size="sm" state=4 %}
+    {% include "design_studio/components/kpi_card.html" with title="Honorar" value=summary.honorarium|floatformat:2 unit="€" icon="bi-file-earmark-text" size="sm" state=5 %}
+    {% include "design_studio/components/kpi_card.html" with title="Netto-Ergebnis" value=summary.net_result|floatformat:2 unit="€" icon="bi-graph-up" size="sm" state=6 %}
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header fw-bold">Anmeldungen &amp; Zahlungsstatus</div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Teilnehmer</th>
+                    <th>E-Mail</th>
+                    <th>Status</th>
+                    <th>Bezahlt</th>
+                    <th class="text-end">Aktionen</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for e in summary.entries %}
+                <tr>
+                    <td class="fw-semibold">{{ e.custom_data_json.absender_name|default:e.title }}</td>
+                    <td class="small">{{ e.custom_data_json.absender_email|default:e.custom_data_json.email|default:"—" }}</td>
+                    <td><span class="badge {% if e.status == 'Bestätigt' %}text-bg-primary{% elif e.status == 'Teilgenommen' %}text-bg-success{% elif e.status == 'Abgesagt' or e.status == 'Abgelehnt' %}text-bg-danger{% else %}text-bg-warning{% endif %}">{{ e.status }}</span></td>
+                    <td>{% if e.custom_data_json.is_paid %}<span class="badge text-bg-success">Bezahlt ✓</span>{% else %}<span class="badge bg-body-secondary text-body border">Offen</span>{% endif %}</td>
+                    <td class="text-end">
+                        <form method="post" action="{% url 'list_kit:entry_confirm' e.collection_id e.id %}" class="d-inline">
+                            {% csrf_token %}
+                            <input type="hidden" name="decision" value="paid">
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <button type="submit" class="btn btn-sm {% if e.custom_data_json.is_paid %}btn-success{% else %}btn-outline-success{% endif %} py-0 px-2">€ Bezahlt</button>
+                        </form>
+                        <form method="post" action="{% url 'list_kit:entry_confirm' e.collection_id e.id %}" class="d-inline">
+                            {% csrf_token %}
+                            <input type="hidden" name="decision" value="attended">
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <button type="submit" class="btn btn-sm {% if e.status == 'Teilgenommen' %}btn-success{% else %}btn-outline-secondary{% endif %} py-0 px-2">Teilgenommen</button>
+                        </form>
+                        <form method="post" action="{% url 'list_kit:entry_confirm' e.collection_id e.id %}" class="d-inline">
+                            {% csrf_token %}
+                            <input type="hidden" name="decision" value="reject">
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2">Absagen</button>
+                        </form>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="5" class="text-center text-muted py-4">Noch keine Anmeldungen für diesen Termin.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

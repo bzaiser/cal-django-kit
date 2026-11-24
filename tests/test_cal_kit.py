@@ -410,6 +410,39 @@ class CalKitTests(TestCase):
     def test_no_missing_migrations(self):
         call_command("makemigrations", "cal_kit", "--check", "--dry-run", verbosity=0)
 
+    def test_offering_template_create_event_and_billing_views(self):
+        from cal_kit.models import OfferingTemplate
+        r = self.client.post("/calendar/offerings/", {
+            "title": "Aquarellkurs",
+            "instructor_name": "Ursula Wolke",
+            "responsible_name": "Margit Hägebarth",
+            "fee_amount": "35.00",
+            "honorarium_amount": "120.00",
+            "default_duration_minutes": "180",
+            "max_participants": "12",
+            "show_in_program": "on",
+        })
+        self.assertEqual(r.status_code, 302)
+        tpl = OfferingTemplate.objects.get(title="Aquarellkurs")
+
+        r_ev = self.client.post(f"/calendar/offerings/{tpl.id}/create-event/", {"start_at": "2026-06-10T10:00"})
+        self.assertEqual(r_ev.status_code, 302)
+        ev = CalendarEvent.objects.get(offering_template=tpl)
+        self.assertTrue(ev.allow_registration)
+        self.assertEqual(str(ev.fee_amount), "35.00")
+
+        ov = self.client.get("/calendar/billing/")
+        self.assertEqual(ov.status_code, 200)
+        self.assertContains(ov, "Aquarellkurs")
+
+        det = self.client.get(f"/calendar/events/{ev.id}/billing/")
+        self.assertEqual(det.status_code, 200)
+        self.assertContains(det, "120")
+
+        csv_r = self.client.get(f"/calendar/events/{ev.id}/billing/csv/")
+        self.assertEqual(csv_r.status_code, 200)
+        self.assertIn("text/csv", csv_r["Content-Type"])
+
 
 if __name__ == "__main__":
     from django.test.runner import DiscoverRunner

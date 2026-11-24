@@ -1,0 +1,93 @@
+{% extends "design_studio/layouts/base.html" %}
+{% load i18n %}
+
+{% block title %}{{ cal_labels.offerings_tab|default:"Angebots-Vorlagen" }}{% endblock %}
+
+{% block content %}
+{% include "cal_kit/includes/_cal_tabs.html" %}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div>
+        <h3 class="fw-bold mb-0"><i class="bi bi-collection me-2 text-primary"></i>{{ cal_labels.offerings_tab|default:"Angebots-Vorlagen" }}</h3>
+        <div class="text-muted small">Vorlagen für das {{ cal_labels.program_title|default:"Programm" }} — Termine &amp; Abrechnungen per 1-Klick erzeugen</div>
+    </div>
+    <button type="button" class="btn btn-sm btn-primary rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#newOfferingModal">
+        <i class="bi bi-plus-lg me-1"></i>Neue {{ cal_labels.offering_singular|default:"Vorlage" }}
+    </button>
+</div>
+
+<div class="row g-3">
+    {% for o in offerings %}
+    <div class="col-12 col-lg-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-body p-3 d-flex flex-column justify-content-between gap-2">
+                <div class="d-flex justify-content-between align-items-start gap-3">
+                    <div class="flex-grow-1 min-w-0">
+                        <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                            <h5 class="fw-bold mb-0">{{ o.title }}</h5>
+                            {% if o.category %}<span class="badge bg-body-secondary text-body border">{{ o.category.name }}</span>{% endif %}
+                            {% if o.show_in_program %}<span class="badge text-bg-success">Im Programm</span>{% endif %}
+                        </div>
+                        {% if o.instructor_name %}<div class="small text-primary fw-semibold">{{ cal_labels.instructor_label }}: {{ o.instructor_name }}</div>{% endif %}
+                        {% if o.responsible_name %}<div class="small text-muted">{{ cal_labels.responsible_label }}: {{ o.responsible_name }}</div>{% endif %}
+                        {% if o.description %}<p class="small text-muted mt-2 mb-1">{{ o.description|truncatechars:180 }}</p>{% endif %}
+                        <div class="d-flex flex-wrap gap-2 small mt-2">
+                            {% if o.fee_amount is not None %}<span class="badge bg-body-secondary text-body border">{{ cal_labels.fee_label }}: {{ o.fee_amount }} €</span>{% endif %}
+                            {% if o.honorarium_amount is not None %}<span class="badge bg-body-secondary text-body border">Honorar: {{ o.honorarium_amount }} €</span>{% endif %}
+                            {% if o.max_participants %}<span class="badge bg-body-secondary text-body border">Max. {{ o.max_participants }} TN</span>{% endif %}
+                            <span class="badge bg-body-secondary text-body border">{{ o.events.count }} Termin(e)</span>
+                        </div>
+                    </div>
+                    {% if o.resolved_image_url %}
+                    <img src="{{ o.resolved_image_url }}" alt="{{ o.title }}" class="rounded-3 object-fit-cover flex-shrink-0" style="width: 92px; height: 92px;">
+                    {% endif %}
+                </div>
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 border-top pt-2">
+                    <form method="post" action="{% url 'cal_kit:offering_create_event' o.id %}" class="d-flex flex-wrap align-items-center gap-1">
+                        {% csrf_token %}
+                        <input type="datetime-local" name="start_at" class="form-control form-control-sm" style="width: auto;" required>
+                        <button type="submit" class="btn btn-sm btn-outline-success rounded-pill px-2"><i class="bi bi-calendar-plus me-1"></i>Termin anlegen</button>
+                    </form>
+                    <div class="d-flex gap-1">
+                        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill" data-bs-toggle="modal" data-bs-target="#editOfferingModal-{{ o.id }}"><i class="bi bi-pencil"></i></button>
+                        <form method="post" action="{% url 'cal_kit:offering_delete' o.id %}" class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill" onclick="return confirm('Vorlage wirklich löschen?')"><i class="bi bi-trash"></i></button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="editOfferingModal-{{ o.id }}" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <form method="post" enctype="multipart/form-data" class="modal-content">
+                {% csrf_token %}
+                <input type="hidden" name="pk" value="{{ o.id }}">
+                <div class="modal-header"><h5 class="modal-title fw-bold">{{ o.title }} bearbeiten</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    {% include "cal_kit/includes/_offering_form_fields.html" with o=o %}
+                </div>
+                <div class="modal-footer"><button type="submit" class="btn btn-primary rounded-pill px-4">Speichern</button></div>
+            </form>
+        </div>
+    </div>
+    {% empty %}
+    <div class="col-12"><div class="card shadow-sm p-4 text-center text-muted">Noch keine {{ cal_labels.offering_plural|default:"Vorlagen" }} angelegt.</div></div>
+    {% endfor %}
+</div>
+
+<div class="modal fade" id="newOfferingModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <form method="post" enctype="multipart/form-data" class="modal-content">
+            {% csrf_token %}
+            <div class="modal-header"><h5 class="modal-title fw-bold">Neue {{ cal_labels.offering_singular|default:"Vorlage" }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                {% include "cal_kit/includes/_offering_form_fields.html" with o=None %}
+            </div>
+            <div class="modal-footer"><button type="submit" class="btn btn-primary rounded-pill px-4">Anlegen</button></div>
+        </form>
+    </div>
+</div>
+{% endblock %}

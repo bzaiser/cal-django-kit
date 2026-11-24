@@ -4,6 +4,7 @@ import uuid
 
 from django.conf import settings
 from django.db import models
+from django.utils.text import slugify
 
 
 RECURRENCE_CHOICES = [
@@ -40,6 +41,68 @@ class CalendarCategory(models.Model):
         return self.name
 
 
+class OfferingTemplate(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="cal_kit_offerings",
+    )
+    category = models.ForeignKey(
+        CalendarCategory,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="offerings",
+    )
+    title = models.CharField(max_length=160)
+    slug = models.SlugField(max_length=180, blank=True)
+    image = models.FileField(upload_to="cal_kit/offerings/%Y/%m/", blank=True, null=True)
+    image_url = models.URLField(blank=True, default="")
+    description = models.TextField(blank=True, default="")
+    bring_along_note = models.TextField(blank=True, default="")
+    material_note = models.CharField(max_length=200, blank=True, default="")
+    default_location = models.CharField(max_length=140, blank=True, default="")
+    default_duration_minutes = models.PositiveIntegerField(default=120)
+    min_participants = models.PositiveIntegerField(null=True, blank=True)
+    max_participants = models.PositiveIntegerField(null=True, blank=True)
+    instructor_ref = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    instructor_name = models.CharField(max_length=140, blank=True, default="")
+    responsible_ref = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    responsible_name = models.CharField(max_length=140, blank=True, default="")
+    contract_ref = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    fee_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    fee_non_member = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    fee_reduced = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    honorarium_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    show_in_program = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["title", "id"]
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            base = slugify(self.title) or "angebot"
+            cand = base
+            idx = 2
+            while OfferingTemplate.objects.filter(slug=cand).exclude(pk=self.pk).exists():
+                cand = f"{base}-{idx}"
+                idx += 1
+            self.slug = cand
+        super().save(*args, **kwargs)
+
+    @property
+    def resolved_image_url(self) -> str:
+        if self.image:
+            try:
+                return self.image.url
+            except Exception:
+                pass
+        return self.image_url or ""
+
+    def __str__(self):
+        return self.title
+
+
 class CalendarEvent(models.Model):
     uid = models.CharField(max_length=128, unique=True, default=uuid.uuid4)
     user = models.ForeignKey(
@@ -53,6 +116,12 @@ class CalendarEvent(models.Model):
         on_delete=models.SET_NULL,
         related_name="events",
     )
+    offering_template = models.ForeignKey(
+        OfferingTemplate,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="events",
+    )
     title = models.CharField(max_length=140)
     start_at = models.DateTimeField(db_index=True)
     end_at = models.DateTimeField()
@@ -61,6 +130,10 @@ class CalendarEvent(models.Model):
     resource_ref = models.CharField(max_length=64, blank=True, default="", db_index=True)
     instructor_ref = models.CharField(max_length=64, blank=True, default="", db_index=True)
     instructor_name = models.CharField(max_length=140, blank=True, default="")
+    responsible_ref = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    responsible_name = models.CharField(max_length=140, blank=True, default="")
+    contract_ref = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    fee_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     allow_registration = models.BooleanField(default=False)
     max_participants = models.PositiveIntegerField(null=True, blank=True)
     description = models.TextField(blank=True, default="")

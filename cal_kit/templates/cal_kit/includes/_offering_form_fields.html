@@ -1,0 +1,103 @@
+<div class="row g-2">
+    <div class="col-md-8">
+        <label class="form-label small fw-semibold mb-1">Titel</label>
+        <input type="text" name="title" class="form-control form-control-sm" value="{{ o.title|default:'' }}" required>
+    </div>
+    <div class="col-md-4">
+        <label class="form-label small fw-semibold mb-1">Kategorie</label>
+        <select name="category" class="form-select form-select-sm">
+            <option value="">— Keine —</option>
+            {% for c in categories %}<option value="{{ c.id }}" {% if o and o.category_id == c.id %}selected{% endif %}>{{ c.name }}</option>{% endfor %}
+        </select>
+    </div>
+    <div class="col-md-6">
+        <label class="form-label small fw-semibold mb-1">{{ cal_labels.instructor_label|default:"Dozent / Leitung" }}</label>
+        <select name="instructor_ref" class="form-select form-select-sm">
+            <option value="">— Auswählen —</option>
+            {% if instructors.lead %}
+            <optgroup label="Dozenten &amp; Leitung">
+                {% for p in instructors.lead %}<option value="{{ p.ref }}" {% if o and o.instructor_ref == p.ref %}selected{% endif %}>{{ p.label }}</option>{% endfor %}
+            </optgroup>
+            {% endif %}
+            {% if instructors.other %}
+            <optgroup label="Weitere Personen">
+                {% for p in instructors.other %}<option value="{{ p.ref }}" {% if o and o.instructor_ref == p.ref %}selected{% endif %}>{{ p.label }}</option>{% endfor %}
+            </optgroup>
+            {% endif %}
+        </select>
+    </div>
+    <div class="col-md-6">
+        <label class="form-label small fw-semibold mb-1">{{ cal_labels.responsible_label|default:"Ansprechpartner / Zuständiger" }}</label>
+        <select name="responsible_ref" class="form-select form-select-sm">
+            <option value="">— Auswählen —</option>
+            {% for p in instructors.lead %}<option value="{{ p.ref }}" {% if o and o.responsible_ref == p.ref %}selected{% endif %}>{{ p.label }}</option>{% endfor %}
+            {% for p in instructors.other %}<option value="{{ p.ref }}" {% if o and o.responsible_ref == p.ref %}selected{% endif %}>{{ p.label }}</option>{% endfor %}
+        </select>
+    </div>
+    <div class="col-md-6">
+        <label class="form-label small fw-semibold mb-1">Verknüpfter Vertrag (optional)</label>
+        <select name="contract_ref" class="form-select form-select-sm">
+            <option value="">— Kein Vertrag —</option>
+            {% for c in contract_options %}<option value="{{ c.ref }}" {% if o and o.contract_ref == c.ref %}selected{% endif %}>{{ c.label }}</option>{% endfor %}
+        </select>
+    </div>
+    <div class="col-md-6">
+        <label class="form-label small fw-semibold mb-1">Standard-Ort / Raum</label>
+        <input type="text" name="default_location" class="form-control form-control-sm" value="{{ o.default_location|default:'' }}" list="offeringLocList">
+        <datalist id="offeringLocList">{% for l in location_options %}<option value="{{ l.label }}">{% endfor %}</datalist>
+    </div>
+    <div class="col-12">
+        <label class="form-label small fw-semibold mb-1">Beschreibung (Prosa für Programm)</label>
+        <textarea name="description" rows="3" class="form-control form-control-sm">{{ o.description|default:'' }}</textarea>
+    </div>
+    <div class="col-md-6">
+        <label class="form-label small fw-semibold mb-1">Bitte mitbringen / Hinweise</label>
+        <input type="text" name="bring_along_note" class="form-control form-control-sm" value="{{ o.bring_along_note|default:'' }}">
+    </div>
+    <div class="col-md-6">
+        <label class="form-label small fw-semibold mb-1">Material- / Zusatzkostenhinweis</label>
+        <input type="text" name="material_note" class="form-control form-control-sm" value="{{ o.material_note|default:'' }}" placeholder="z. B. zzgl. Materialkosten">
+    </div>
+    <div class="col-md-3">
+        <label class="form-label small fw-semibold mb-1">{{ cal_labels.fee_label|default:"Gebühr" }} (€)</label>
+        <input type="number" step="0.01" name="fee_amount" class="form-control form-control-sm" value="{{ o.fee_amount|default_if_none:'' }}">
+    </div>
+    <div class="col-md-3">
+        <label class="form-label small fw-semibold mb-1">Nichtmitglieder (€)</label>
+        <input type="number" step="0.01" name="fee_non_member" class="form-control form-control-sm" value="{{ o.fee_non_member|default_if_none:'' }}">
+    </div>
+    <div class="col-md-3">
+        <label class="form-label small fw-semibold mb-1">Ermäßigt (€)</label>
+        <input type="number" step="0.01" name="fee_reduced" class="form-control form-control-sm" value="{{ o.fee_reduced|default_if_none:'' }}">
+    </div>
+    <div class="col-md-3">
+        <label class="form-label small fw-semibold mb-1">Honorar (€)</label>
+        <input type="number" step="0.01" name="honorarium_amount" class="form-control form-control-sm" value="{{ o.honorarium_amount|default_if_none:'' }}">
+    </div>
+    <div class="col-md-4">
+        <label class="form-label small fw-semibold mb-1">Dauer (Minuten)</label>
+        <input type="number" name="default_duration_minutes" class="form-control form-control-sm" value="{{ o.default_duration_minutes|default:120 }}">
+    </div>
+    <div class="col-md-4">
+        <label class="form-label small fw-semibold mb-1">Min. Teilnehmer</label>
+        <input type="number" name="min_participants" class="form-control form-control-sm" value="{{ o.min_participants|default_if_none:'' }}">
+    </div>
+    <div class="col-md-4">
+        <label class="form-label small fw-semibold mb-1">Max. Teilnehmer</label>
+        <input type="number" name="max_participants" class="form-control form-control-sm" value="{{ o.max_participants|default_if_none:'' }}">
+    </div>
+    <div class="col-md-6">
+        <label class="form-label small fw-semibold mb-1">Bild hochladen</label>
+        <input type="file" name="image" accept="image/*" class="form-control form-control-sm">
+    </div>
+    <div class="col-md-6">
+        <label class="form-label small fw-semibold mb-1">oder Bild-URL</label>
+        <input type="url" name="image_url" class="form-control form-control-sm" value="{{ o.image_url|default:'' }}">
+    </div>
+    <div class="col-12">
+        <div class="form-check">
+            <input type="checkbox" name="show_in_program" id="showProg-{{ o.id|default:'new' }}" class="form-check-input" {% if not o or o.show_in_program %}checked{% endif %}>
+            <label class="form-check-label small" for="showProg-{{ o.id|default:'new' }}">Im öffentlichen {{ cal_labels.program_title|default:"Programm" }} anzeigen</label>
+        </div>
+    </div>
+</div>

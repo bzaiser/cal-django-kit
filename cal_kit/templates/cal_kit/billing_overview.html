@@ -1,0 +1,60 @@
+{% extends "design_studio/layouts/base.html" %}
+{% load i18n %}
+
+{% block title %}{{ cal_labels.billing_tab|default:"Termine & Abrechnung" }}{% endblock %}
+
+{% block content %}
+{% include "cal_kit/includes/_cal_tabs.html" %}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div>
+        <h3 class="fw-bold mb-0"><i class="bi bi-receipt me-2 text-primary"></i>{{ cal_labels.billing_tab|default:"Termine & Abrechnung" }}</h3>
+        <div class="text-muted small">Teilnehmerzahlen, Zahlungsstatus, Honorare und Ergebnis je Termin</div>
+    </div>
+</div>
+
+<div class="kpi-bento-grid mb-4">
+    {% include "design_studio/components/kpi_card.html" with title="Soll-Einnahmen" value=total_expected|floatformat:2 unit="€" icon="bi-cash-stack" size="sm" state=1 %}
+    {% include "design_studio/components/kpi_card.html" with title="Bereits bezahlt" value=total_paid|floatformat:2 unit="€" icon="bi-check-circle" size="sm" state=2 %}
+    {% include "design_studio/components/kpi_card.html" with title="Netto-Ergebnis" value=total_net|floatformat:2 unit="€" icon="bi-graph-up" size="sm" state=3 %}
+</div>
+
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Termin</th>
+                    <th>Datum</th>
+                    <th>{{ cal_labels.instructor_label|default:"Leitung" }}</th>
+                    <th>Teilnehmer</th>
+                    <th>Bezahlt</th>
+                    <th>Soll / Ist</th>
+                    <th>Honorar</th>
+                    <th>Ergebnis</th>
+                    <th class="text-end">Aktion</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td class="fw-semibold">{{ row.event.title }}</td>
+                    <td class="small">{{ row.event.start_at|date:"d.m.Y H:i" }}</td>
+                    <td class="small">{{ row.event.instructor_name|default:"—" }}</td>
+                    <td>{{ row.summary.booked_count }}{% if row.event.max_participants %} / {{ row.event.max_participants }}{% endif %}</td>
+                    <td><span class="badge text-bg-success">{{ row.summary.paid_count }}</span></td>
+                    <td class="small">{{ row.summary.expected_revenue|floatformat:2 }} € / <strong>{{ row.summary.paid_revenue|floatformat:2 }} €</strong></td>
+                    <td class="small">{{ row.summary.honorarium|floatformat:2 }} €</td>
+                    <td class="fw-bold {% if row.summary.net_result >= 0 %}text-success{% else %}text-danger{% endif %}">{{ row.summary.net_result|floatformat:2 }} €</td>
+                    <td class="text-end">
+                        <a href="{% url 'cal_kit:event_billing' row.event.id %}" class="btn btn-sm btn-outline-primary rounded-pill px-3">Abrechnung</a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="9" class="text-center text-muted py-4">Noch keine Termine mit Anmeldung oder Vorlage vorhanden.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
