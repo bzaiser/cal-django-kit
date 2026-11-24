@@ -740,12 +740,73 @@ def offering_list_view(request):
 @require_POST
 def offering_create_event_view(request, pk):
     tpl = get_object_or_404(OfferingTemplate, pk=pk)
-    start_dt = _parse_dt(request.POST.get("start_at") or "")
+    start_date_raw = (request.POST.get("start_date") or "").strip()
+    start_time_raw = (request.POST.get("start_time") or "").strip()
+    end_time_raw = (request.POST.get("end_time") or "").strip()
+
+    if start_date_raw:
+        st_time = start_time_raw or "10:00"
+        start_dt = _parse_dt(f"{start_date_raw}T{st_time}")
+        if start_dt and end_time_raw:
+            end_dt = _parse_dt(f"{start_date_raw}T{end_time_raw}")
+        else:
+            end_dt = None
+    else:
+        start_dt = _parse_dt(request.POST.get("start_at") or "")
+        end_dt = _parse_dt(request.POST.get("end_at") or "")
+
     if not start_dt:
         start_dt = timezone.now().replace(minute=0, second=0, microsecond=0) + timedelta(days=7)
-    end_dt = _parse_dt(request.POST.get("end_at") or "")
     if not end_dt or end_dt <= start_dt:
         end_dt = start_dt + timedelta(minutes=tpl.default_duration_minutes or 120)
+
+    r_ref = (request.POST.get("resource_ref") or "").strip()[:64]
+    loc = (request.POST.get("location") or "").strip()[:140]
+    if r_ref and not loc:
+        for opt in _get_domain_location_options():
+            if opt["ref"] == r_ref:
+                loc = opt["label"][:140]
+                break
+    if not loc:
+        loc = tpl.default_location[:140]
+
+    rule = (request.POST.get("recurrence_rule") or "none").strip()
+    if rule not in dict(RECURRENCE_CHOICES):
+        rule = "none"
+    try:
+        interval = max(1, min(99, int(request.POST.get("recurrence_interval") or 1)))
+    except (TypeError, ValueError):
+        interval = 1
+
+    wd_list = [d.strip() for d in request.POST.getlist("recurrence_weekdays") if d.strip().isdigit() and 0 <= int(d.strip()) <= 6]
+    if not wd_list:
+        raw_wd = (request.POST.get("recurrence_weekdays") or "").strip()
+        wd_list = [d.strip() for d in raw_wd.split(",") if d.strip().isdigit() and 0 <= int(d.strip()) <= 6]
+    if rule == "weekly" and not wd_list:
+        wd_list = [str(timezone.localtime(start_dt).weekday())]
+    weekdays_str = ",".join(wd_list) if rule == "weekly" else ""
+
+    until_date = None
+    until_raw = (request.POST.get("recurrence_until") or "").strip()
+    repeat_raw = (request.POST.get("repeat_count") or "").strip()
+    if until_raw:
+        try:
+            until_date = datetime.fromisoformat(until_raw).date()
+        except Exception:
+            until_date = None
+    elif rule != "none" and repeat_raw.isdigit() and int(repeat_raw) > 1:
+        cnt = min(104, int(repeat_raw))
+        base_d = timezone.localtime(start_dt).date()
+        if rule == "daily":
+            until_date = base_d + timedelta(days=(cnt - 1) * interval)
+        elif rule == "weekly":
+            per_week = max(1, len(wd_list))
+            weeks_needed = max(0, (cnt - 1) // per_week)
+            until_date = base_d + timedelta(weeks=weeks_needed * interval, days=6)
+        elif rule == "monthly":
+            until_date = base_d + timedelta(days=31 * (cnt - 1) * interval)
+        elif rule == "yearly":
+            until_date = base_d + timedelta(days=366 * (cnt - 1) * interval)
 
     ev = CalendarEvent.objects.create(
         user=request.user,
@@ -754,7 +815,8 @@ def offering_create_event_view(request, pk):
         title=(request.POST.get("title") or tpl.title)[:140],
         start_at=start_dt,
         end_at=end_dt,
-        location=(request.POST.get("location") or tpl.default_location)[:140],
+        location=loc,
+        resource_ref=r_ref,
         instructor_ref=tpl.instructor_ref,
         instructor_name=tpl.instructor_name,
         responsible_ref=tpl.responsible_ref,
@@ -766,6 +828,10 @@ def offering_create_event_view(request, pk):
         is_public=True,
         description=tpl.description,
         color_state=tpl.category.color_state if tpl.category else 1,
+        recurrence_rule=rule,
+        recurrence_interval=interval,
+        recurrence_until=until_date,
+        recurrence_weekdays=weekdays_str,
     )
     messages.success(request, f"Termin „{ev.title}“ aus Vorlage erstellt.")
     return redirect("cal_kit:event_billing", pk=ev.id)

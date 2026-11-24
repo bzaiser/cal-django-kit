@@ -443,6 +443,25 @@ class CalKitTests(TestCase):
         self.assertEqual(csv_r.status_code, 200)
         self.assertIn("text/csv", csv_r["Content-Type"])
 
+        # Recurring event from offering: 13x Mondays 16:00-22:00 + free-text location
+        r_rec = self.client.post(f"/calendar/offerings/{tpl.id}/create-event/", {
+            "start_date": "2026-09-07",
+            "start_time": "16:00",
+            "end_time": "22:00",
+            "location": "Alte Kapelle",
+            "recurrence_rule": "weekly",
+            "recurrence_weekdays": ["0"],
+            "repeat_count": "13",
+        })
+        self.assertEqual(r_rec.status_code, 302)
+        ev_rec = CalendarEvent.objects.filter(offering_template=tpl, location="Alte Kapelle").first()
+        self.assertIsNotNone(ev_rec)
+        self.assertEqual(ev_rec.recurrence_rule, "weekly")
+        self.assertEqual(ev_rec.recurrence_weekdays, "0")
+        from datetime import timedelta
+        occs = list(ev_rec.get_occurrences(ev_rec.start_at, ev_rec.start_at + timedelta(days=120)))
+        self.assertEqual(len(occs), 13)
+
 
 if __name__ == "__main__":
     from django.test.runner import DiscoverRunner

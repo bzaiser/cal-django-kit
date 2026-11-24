@@ -43,11 +43,9 @@
                     {% endif %}
                 </div>
                 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 border-top pt-2">
-                    <form method="post" action="{% url 'cal_kit:offering_create_event' o.id %}" class="d-flex flex-wrap align-items-center gap-1">
-                        {% csrf_token %}
-                        <input type="datetime-local" name="start_at" class="form-control form-control-sm" style="width: auto;" required>
-                        <button type="submit" class="btn btn-sm btn-outline-success rounded-pill px-2"><i class="bi bi-calendar-plus me-1"></i>Termin anlegen</button>
-                    </form>
+                    <button type="button" class="btn btn-sm btn-outline-success rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#createEventModal-{{ o.id }}">
+                        <i class="bi bi-calendar-plus me-1"></i>Termin anlegen
+                    </button>
                     <div class="d-flex gap-1">
                         <button type="button" class="btn btn-sm btn-outline-primary rounded-pill" data-bs-toggle="modal" data-bs-target="#editOfferingModal-{{ o.id }}"><i class="bi bi-pencil"></i></button>
                         <form method="post" action="{% url 'cal_kit:offering_delete' o.id %}" class="d-inline">
@@ -57,6 +55,70 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="createEventModal-{{ o.id }}" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <form method="post" action="{% url 'cal_kit:offering_create_event' o.id %}" class="modal-content">
+                {% csrf_token %}
+                <div class="modal-header"><h5 class="modal-title fw-bold">Termin anlegen: {{ o.title }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body row g-2">
+                    <div class="col-md-5">
+                        <label class="form-label small fw-semibold mb-1">Startdatum</label>
+                        <input type="date" name="start_date" class="form-control form-control-sm" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-semibold mb-1">Von</label>
+                        <input type="time" name="start_time" class="form-control form-control-sm" value="16:00" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-semibold mb-1">Bis</label>
+                        <input type="time" name="end_time" class="form-control form-control-sm" value="19:00" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold mb-1">Ressource / Raum</label>
+                        <select name="resource_ref" class="form-select form-select-sm">
+                            <option value="">— Keine / Freitext —</option>
+                            {% for l in location_options %}<option value="{{ l.ref }}">{{ l.label }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold mb-1">oder Ort (Freitext)</label>
+                        <input type="text" name="location" class="form-control form-control-sm" value="{{ o.default_location }}">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold mb-1">Wiederholung</label>
+                        <select name="recurrence_rule" class="form-select form-select-sm">
+                            <option value="none">Einmalig</option>
+                            <option value="weekly">Wöchentlich</option>
+                            <option value="daily">Täglich</option>
+                            <option value="monthly">Monatlich</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold mb-1">Anzahl Termine (z. B. 13)</label>
+                        <input type="number" min="1" max="104" name="repeat_count" class="form-control form-control-sm" placeholder="z. B. 13">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small fw-semibold mb-1">Wochentage (bei wöchentlich)</label>
+                        <div class="d-flex flex-wrap gap-2 small">
+                            <label class="form-check-label"><input type="checkbox" name="recurrence_weekdays" value="0" class="form-check-input"> Mo</label>
+                            <label class="form-check-label"><input type="checkbox" name="recurrence_weekdays" value="1" class="form-check-input"> Di</label>
+                            <label class="form-check-label"><input type="checkbox" name="recurrence_weekdays" value="2" class="form-check-input"> Mi</label>
+                            <label class="form-check-label"><input type="checkbox" name="recurrence_weekdays" value="3" class="form-check-input"> Do</label>
+                            <label class="form-check-label"><input type="checkbox" name="recurrence_weekdays" value="4" class="form-check-input"> Fr</label>
+                            <label class="form-check-label"><input type="checkbox" name="recurrence_weekdays" value="5" class="form-check-input"> Sa</label>
+                            <label class="form-check-label"><input type="checkbox" name="recurrence_weekdays" value="6" class="form-check-input"> So</label>
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small fw-semibold mb-1">oder Enddatum (alternativ zur Anzahl)</label>
+                        <input type="date" name="recurrence_until" class="form-control form-control-sm">
+                    </div>
+                </div>
+                <div class="modal-footer"><button type="submit" class="btn btn-success rounded-pill px-4">Termin anlegen</button></div>
+            </form>
         </div>
     </div>
 

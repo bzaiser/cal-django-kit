@@ -910,6 +910,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var calendar = new FullCalendar.Calendar(calEl, {
         locale: 'de',
         initialView: 'dayGridMonth',
+        initialDate: new URLSearchParams(window.location.search).get('date') || undefined,
         firstDay: 1,
         height: 'auto',
         selectable: true,
