@@ -462,6 +462,16 @@ class CalKitTests(TestCase):
         occs = list(ev_rec.get_occurrences(ev_rec.start_at, ev_rec.start_at + timedelta(days=120)))
         self.assertEqual(len(occs), 13)
 
+        # Icon "none" is persisted cleanly
+        r_none = self.client.post("/calendar/save/", {
+            "title": "Ohne Icon Termin",
+            "start_at": "2026-09-10T10:00",
+            "end_at": "2026-09-10T11:00",
+            "icon": "none",
+        }, HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        self.assertEqual(r_none.status_code, 200)
+        self.assertEqual(CalendarEvent.objects.get(title="Ohne Icon Termin").icon, "none")
+
 
 if __name__ == "__main__":
     from django.test.runner import DiscoverRunner

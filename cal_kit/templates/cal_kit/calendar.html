@@ -622,7 +622,8 @@
                             <label class="form-label small fw-semibold d-block mb-1">{% trans "Symbol (Outlook-Stil)" %}</label>
                             <input type="hidden" name="icon" id="calEvIcon" value="">
                             <div class="d-flex flex-wrap gap-1 align-items-center" id="calEvIconSwatches">
-                                <button type="button" class="cal-icon-btn active" data-icon="" title="{% trans 'Automatisch' %}">Auto</button>
+                                <button type="button" class="cal-icon-btn active" data-icon="" title="{% trans 'Automatisch anhand Titel/Kategorie' %}">Auto</button>
+                                <button type="button" class="cal-icon-btn" data-icon="none" title="{% trans 'Kein Symbol anzeigen' %}">Ohne</button>
                                 <button type="button" class="cal-icon-btn" data-icon="bi-people-fill" title="{% trans 'Besprechung' %}"><i class="bi bi-people-fill"></i></button>
                                 <button type="button" class="cal-icon-btn" data-icon="bi-briefcase-fill" title="{% trans 'Vorstandssitzung / Gremium' %}"><i class="bi bi-briefcase-fill"></i></button>
                                 <button type="button" class="cal-icon-btn" data-icon="bi-megaphone-fill" title="{% trans 'Versammlung / Info' %}"><i class="bi bi-megaphone-fill"></i></button>
@@ -1051,7 +1052,9 @@ document.addEventListener('DOMContentLoaded', function () {
             var wrap = document.createElement('div');
             wrap.className = 'cal-ev-content';
 
-            if (customIcon && customIcon.indexOf('bi-') === 0) {
+            if (customIcon === 'none') {
+                // Kein Symbol gewünscht
+            } else if (customIcon && customIcon.indexOf('bi-') === 0) {
                 var typeIcon = document.createElement('i');
                 typeIcon.className = 'bi ' + customIcon + ' cal-ev-type-icon flex-shrink-0';
                 typeIcon.title = isReminder ? 'Erinnerung' : 'Termin';
@@ -1062,17 +1065,25 @@ document.addEventListener('DOMContentLoaded', function () {
                 emojiIcon.textContent = customIcon;
                 wrap.appendChild(emojiIcon);
             } else {
+                var tLow = String(arg.event.title || '').toLowerCase();
+                var autoCls = '';
+                if (/weihnacht|winter/.test(tLow)) autoCls = 'bi-snow';
+                else if (/geburtstag/.test(tLow)) autoCls = 'bi-cake2-fill';
+                else if (/vorstand|gremium|sitzung|beirat/.test(tLow)) autoCls = 'bi-briefcase-fill';
+                else if (/aquarell|mal|kunst|ausstellung|atelier|bildhauer/.test(tLow)) autoCls = 'bi-palette-fill';
+                else if (/konzert|musik|chor/.test(tLow)) autoCls = 'bi-music-note-beamed';
+                else if (/stammtisch|treff|kaffee|café/.test(tLow)) autoCls = 'bi-cup-hot-fill';
+                else if (/online|zoom|teams|video/.test(tLow)) autoCls = 'bi-camera-video-fill';
+                else if (/ausflug|exkursion|fahrt|reise/.test(tLow)) autoCls = 'bi-geo-alt-fill';
+                else if (/fest|feier|jubil/.test(tLow)) autoCls = 'bi-gift-fill';
+                else if (/kurs|seminar|workshop/.test(tLow) || ext.allow_registration) autoCls = 'bi-mortarboard-fill';
+                else if (isReminder) autoCls = 'bi-alarm-fill';
+                else if (isAllDay) autoCls = 'bi-sun';
+                else autoCls = 'bi-calendar-event';
+
                 var fallbackIcon = document.createElement('i');
-                if (isReminder) {
-                    fallbackIcon.className = 'bi bi-alarm-fill cal-ev-type-icon flex-shrink-0';
-                    fallbackIcon.title = 'Erinnerung';
-                } else if (isAllDay) {
-                    fallbackIcon.className = 'bi bi-sun cal-ev-type-icon flex-shrink-0';
-                    fallbackIcon.title = 'Ganztag';
-                } else {
-                    fallbackIcon.className = 'bi bi-calendar-event cal-ev-type-icon flex-shrink-0';
-                    fallbackIcon.title = 'Termin';
-                }
+                fallbackIcon.className = 'bi ' + autoCls + ' cal-ev-type-icon flex-shrink-0';
+                fallbackIcon.title = isReminder ? 'Erinnerung' : 'Termin';
                 wrap.appendChild(fallbackIcon);
             }
 

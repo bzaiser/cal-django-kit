@@ -441,7 +441,7 @@ def save_event_view(request):
     except (TypeError, ValueError):
         ev.color_state = 1
     raw_icon = (request.POST.get("icon") or "").strip()[:40]
-    ev.icon = raw_icon if raw_icon.startswith("bi-") else ""
+    ev.icon = raw_icon if (raw_icon.startswith("bi-") or raw_icon == "none") else ""
 
     rule = (request.POST.get("recurrence_rule") or "none").strip()
     ev.recurrence_rule = rule if rule in dict(RECURRENCE_CHOICES) else "none"
