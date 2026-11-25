@@ -15,6 +15,7 @@
     <div class="d-flex gap-2">
         <a href="{% url 'cal_kit:calendar' %}?date={{ event.start_at|date:'Y-m-d' }}&event={{ event.id }}" class="btn btn-sm btn-outline-secondary rounded-pill px-3"><i class="bi bi-calendar3 me-1"></i>Termin öffnen</a>
         <a href="{% url 'cal_kit:event_billing_csv' event.id %}" class="btn btn-sm btn-outline-secondary rounded-pill px-3"><i class="bi bi-filetype-csv me-1"></i>CSV-Export</a>
+        <a href="{% url 'cal_kit:event_credit_note_pdf' event.id %}" target="_blank" class="btn btn-sm btn-outline-success rounded-pill px-3"><i class="bi bi-file-earmark-pdf me-1"></i>Honorargutschrift (PDF)</a>
         <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3" onclick="window.print()"><i class="bi bi-printer me-1"></i>Drucken</button>
     </div>
 </div>
@@ -47,8 +48,19 @@
                     <td class="fw-semibold">{{ e.custom_data_json.absender_name|default:e.title }}</td>
                     <td class="small">{{ e.custom_data_json.absender_email|default:e.custom_data_json.email|default:"—" }}</td>
                     <td><span class="badge {% if e.status == 'Bestätigt' %}text-bg-primary{% elif e.status == 'Teilgenommen' %}text-bg-success{% elif e.status == 'Abgesagt' or e.status == 'Abgelehnt' %}text-bg-danger{% else %}text-bg-warning{% endif %}">{{ e.status }}</span></td>
-                    <td>{% if e.custom_data_json.is_paid %}<span class="badge text-bg-success">Bezahlt ✓</span>{% else %}<span class="badge bg-body-secondary text-body border">Offen</span>{% endif %}</td>
+                    <td>
+                        {% if e.custom_data_json.is_paid %}<span class="badge text-bg-success">Bezahlt ✓{% if e.custom_data_json.paid_amount %} ({{ e.custom_data_json.paid_amount }} €){% endif %}</span>{% else %}<span class="badge bg-body-secondary text-body border">Offen</span>{% endif %}
+                        {% if e.custom_data_json.cancellation_fee %}<span class="badge text-bg-warning">Storno: {{ e.custom_data_json.cancellation_fee }} €</span>{% endif %}
+                    </td>
                     <td class="text-end">
+                        <form method="post" action="{% url 'list_kit:entry_confirm' e.collection_id e.id %}" class="d-inline-flex align-items-center gap-1 me-1">
+                            {% csrf_token %}
+                            <input type="hidden" name="decision" value="payment_update">
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <input type="text" name="paid_amount" value="{{ e.custom_data_json.paid_amount|default:'' }}" placeholder="Teilbetrag" class="form-control form-control-sm py-0 px-1" style="width:74px;">
+                            <input type="text" name="cancellation_fee" value="{{ e.custom_data_json.cancellation_fee|default:'' }}" placeholder="Storno" class="form-control form-control-sm py-0 px-1" style="width:64px;">
+                            <button type="submit" class="btn btn-sm btn-outline-secondary py-0 px-2" title="Betrag speichern">€</button>
+                        </form>
                         <form method="post" action="{% url 'list_kit:entry_confirm' e.collection_id e.id %}" class="d-inline">
                             {% csrf_token %}
                             <input type="hidden" name="decision" value="paid">

@@ -943,3 +943,58 @@ def event_billing_csv_view(request, pk):
             f"{summary['fee_per_person']:.2f}" if (e.status or "").lower() not in ("abgesagt", "abgelehnt") else "0.00",
         ])
     return resp
+
+
+@login_required
+def event_credit_note_pdf_view(request, pk):
+    ev = get_object_or_404(CalendarEvent.objects.select_related("category", "offering_template"), pk=pk)
+    can_manage = _has_shared_editor_access(request.user) or ev.user_id == request.user.id
+    if not can_manage and ev.instructor_ref not in _user_instructor_refs(request.user):
+        return HttpResponse("Kein Zugriff.", status=403)
+    summary = get_event_billing_summary(ev)
+
+    instructor_address = ""
+    instructor_tax_id = ""
+    if ev.instructor_ref and ev.instructor_ref.startswith("person:") and apps.is_installed("domain_kit"):
+        try:
+            from domain_kit.models import Person
+            pid = int(ev.instructor_ref.split(":", 1)[1])
+            p = Person.objects.prefetch_related("addresses").filter(pk=pid).first()
+            if p:
+                instructor_tax_id = p.tax_id
+                addr = p.addresses.first()
+                if addr:
+                    instructor_address = f"{addr.street}, {addr.postal_code} {addr.city}".strip(", ")
+        except Exception:
+            pass
+
+    org_name = getattr(settings, "DESIGN_STUDIO_APP_NAME", "Verein / Akademie")
+    if apps.is_installed("site_kit"):
+        try:
+            from site_kit.models import SiteConfig
+            org_name = SiteConfig.get_solo().site_name or org_name
+        except Exception:
+            pass
+
+    from django.template.loader import render_to_string
+    html = render_to_string("cal_kit/event_credit_note_pdf.html", {
+        "event": ev,
+        "summary": summary,
+        "org_name": org_name,
+        "instructor_address": instructor_address,
+        "instructor_tax_id": instructor_tax_id,
+        "credit_note_no": f"GS-{ev.start_at:%Y}-{ev.id:04d}",
+        "issued_date": timezone.localdate(),
+    })
+    try:
+        from io import BytesIO
+        from xhtml2pdf import pisa
+        buf = BytesIO()
+        status = pisa.CreatePDF(html, dest=buf, encoding="utf-8")
+        if not status.err:
+            resp = HttpResponse(buf.getvalue(), content_type="application/pdf")
+            resp["Content-Disposition"] = f'inline; filename="gutschrift-{ev.id}.pdf"'
+            return resp
+    except Exception:
+        pass
+    return HttpResponse(html)

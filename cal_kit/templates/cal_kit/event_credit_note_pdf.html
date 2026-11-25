@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<style>
+  body { font-family: Helvetica, Arial, sans-serif; font-size: 10.5pt; color: #222; margin: 2cm; }
+  h1 { font-size: 16pt; margin-bottom: 4px; }
+  .muted { color: #666; font-size: 9pt; }
+  table { width: 100%; border-collapse: collapse; margin-top: 18px; }
+  th, td { border-bottom: 1px solid #ddd; padding: 8px 6px; text-align: left; }
+  th { background: #f5f5f5; }
+  .right { text-align: right; }
+  .total { font-weight: bold; font-size: 12pt; border-top: 2px solid #222; }
+  .box { border: 1px solid #ccc; padding: 10px; margin-top: 18px; background: #fafafa; font-size: 9pt; }
+</style>
+</head>
+<body>
+  <div class="muted">{{ org_name }} · Honorarabrechnung (Gutschriftverfahren)</div>
+  <h1>Honorargutschrift {{ credit_note_no }}</h1>
+  <div class="muted">Ausstellungsdatum: {{ issued_date|date:"d.m.Y" }}</div>
+
+  <p style="margin-top: 16px;">
+    <strong>Empfänger (Dozent / Kursleitung):</strong><br>
+    {{ event.instructor_name|default:"—" }}<br>
+    {% if instructor_address %}{{ instructor_address }}<br>{% endif %}
+    {% if instructor_tax_id %}Steuernr. / USt-ID: {{ instructor_tax_id }}{% endif %}
+  </p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Leistung / Kurs</th>
+        <th>Datum</th>
+        <th>Ort</th>
+        <th class="right">Betrag (€)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>{{ event.title }}</td>
+        <td>{{ event.start_at|date:"d.m.Y H:i" }}</td>
+        <td>{{ event.location|default:"—" }}</td>
+        <td class="right">{{ summary.honorarium|floatformat:2 }} €</td>
+      </tr>
+      <tr class="total">
+        <td colspan="3">Auszahlungsbetrag (Gutschrift)</td>
+        <td class="right">{{ summary.honorarium|floatformat:2 }} €</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="box">
+    Hinweis: Sofern die Voraussetzungen des § 3 Nr. 26 EStG (Übungsleiterpauschale bis 3.000 €/Jahr) bzw. § 3 Nr. 26a EStG (Ehrenamtspauschale bis 840 €/Jahr) vorliegen, erfolgt die Auszahlung steuer- und sozialversicherungsfrei im Rahmen des gesetzlichen Freibetrags.
+  </div>
+</body>
+</html>

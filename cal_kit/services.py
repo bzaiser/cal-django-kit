@@ -139,9 +139,35 @@ def get_event_billing_summary(event) -> dict:
         except Exception:
             pass
 
+    def _dec(val, fallback=Decimal("0.00")):
+        if val in (None, ""):
+            return fallback
+        try:
+            return Decimal(str(val).replace(",", "."))
+        except Exception:
+            return fallback
+
     expected_revenue = fee * len(booked)
-    paid_revenue = fee * len(paid)
-    open_revenue = expected_revenue - paid_revenue
+    paid_revenue = Decimal("0.00")
+    for e in booked:
+        data = e.custom_data_json or {}
+        if data.get("paid_amount") not in (None, ""):
+            paid_revenue += _dec(data.get("paid_amount"))
+        elif data.get("is_paid"):
+            paid_revenue += fee
+
+    cancellation_revenue = Decimal("0.00")
+    for e in cancelled:
+        data = e.custom_data_json or {}
+        cfee = _dec(data.get("cancellation_fee"))
+        cancellation_revenue += cfee
+        if data.get("paid_amount") not in (None, ""):
+            paid_revenue += _dec(data.get("paid_amount"))
+        elif data.get("is_paid") and cfee > 0:
+            paid_revenue += cfee
+
+    expected_revenue += cancellation_revenue
+    open_revenue = max(Decimal("0.00"), expected_revenue - paid_revenue)
     net_result = paid_revenue - honorarium
 
     return {

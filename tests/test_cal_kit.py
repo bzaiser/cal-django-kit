@@ -500,6 +500,26 @@ class CalKitTests(TestCase):
         self.assertContains(resp, 'name="remove_image"')
         self.assertContains(resp, "kurs")
 
+    def test_event_credit_note_pdf_and_partial_cancellation_billing(self):
+        from datetime import timedelta
+        from decimal import Decimal
+        from django.utils import timezone
+        from cal_kit.models import OfferingTemplate
+        tpl = OfferingTemplate.objects.create(
+            user=self.user, title="Gutschrift-Kurs", fee_amount=Decimal("100.00"), honorarium_amount=Decimal("250.00")
+        )
+        ev = CalendarEvent.objects.create(
+            user=self.user,
+            offering_template=tpl,
+            title="Gutschrift-Termin",
+            instructor_name="Max Dozent",
+            start_at=timezone.now(),
+            end_at=timezone.now() + timedelta(hours=2),
+        )
+        r = self.client.get(f"/calendar/events/{ev.id}/billing/credit-note.pdf")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn(r["Content-Type"], ("application/pdf", "text/html; charset=utf-8"))
+
 
 if __name__ == "__main__":
     from django.test.runner import DiscoverRunner
