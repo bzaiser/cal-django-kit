@@ -520,6 +520,15 @@ class CalKitTests(TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertIn(r["Content-Type"], ("application/pdf", "text/html; charset=utf-8"))
 
+        from django.contrib.auth import get_user_model
+        from django.contrib.auth.models import Group
+        Group.objects.get_or_create(name="Mitglied / Portal")
+        member = get_user_model().objects.create_user(username="plain_member", password="pw", is_staff=False)
+        self.client.force_login(member)
+        self.assertEqual(self.client.get("/calendar/offerings/").status_code, 403)
+        self.assertEqual(self.client.post("/calendar/offerings/", {"title": "Hack"}).status_code, 403)
+        self.assertEqual(self.client.get("/calendar/billing/").status_code, 403)
+
 
 if __name__ == "__main__":
     from django.test.runner import DiscoverRunner

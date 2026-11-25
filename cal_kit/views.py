@@ -706,6 +706,8 @@ def delete_category_view(request, pk):
 
 @login_required
 def offering_list_view(request):
+    if not _can_write_calendar(request.user):
+        return HttpResponse("Kein Zugriff.", status=403)
     cal_labels = get_cal_profile_labels()
     can_manage = _has_shared_editor_access(request.user) or getattr(request.user, "is_staff", False)
     if request.method == "POST":
@@ -894,6 +896,8 @@ def offering_delete_view(request, pk):
 
 @login_required
 def billing_overview_view(request):
+    if not _can_write_calendar(request.user):
+        return HttpResponse("Kein Zugriff.", status=403)
     cal_labels = get_cal_profile_labels()
     can_manage = _has_shared_editor_access(request.user) or getattr(request.user, "is_staff", False)
     qs = CalendarEvent.objects.select_related("category", "offering_template").filter(
