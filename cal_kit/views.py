@@ -375,9 +375,9 @@ def _event_registration_count(event_id: int) -> int:
 def _has_shared_editor_access(user) -> bool:
     if not user or not getattr(user, "is_authenticated", False):
         return False
-    if getattr(user, "is_superuser", False) or getattr(user, "is_staff", False):
+    if getattr(user, "is_superuser", False):
         return True
-    return user.groups.filter(name__in=("Redakteur", "Leitung / Vorstand", "Vorstand")).exists()
+    return user.groups.filter(name__in=("Redakteur", "Pressewart", "Leitung / Vorstand", "Vorstand", "Schriftführer")).exists()
 
 
 @login_required
