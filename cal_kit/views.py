@@ -170,6 +170,7 @@ def calendar_view(request):
         "location_options": location_options,
         "instructors": instructors,
         "offering_templates": OfferingTemplate.objects.order_by("title"),
+        "can_write_calendar": _can_write_calendar(request.user),
         "cal_labels": get_cal_profile_labels(),
         "cal_active_tab": "calendar",
     })
@@ -372,6 +373,19 @@ def _event_registration_count(event_id: int) -> int:
         return 0
 
 
+def _can_write_calendar(user) -> bool:
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    if getattr(user, "is_superuser", False) or getattr(user, "is_staff", False):
+        return True
+    from django.contrib.auth.models import Group
+    if not Group.objects.exists():
+        return True
+    return user.groups.filter(
+        name__in=("Leitung / Vorstand", "Vorstand", "Redakteur", "Pressewart", "Schriftführer", "Dozenten", "Mitarbeiter")
+    ).exists()
+
+
 def _has_shared_editor_access(user) -> bool:
     if not user or not getattr(user, "is_authenticated", False):
         return False
@@ -383,6 +397,8 @@ def _has_shared_editor_access(user) -> bool:
 @login_required
 @require_POST
 def save_event_view(request):
+    if not _can_write_calendar(request.user):
+        return JsonResponse({"status": "error", "message": "Keine Schreibberechtigung im Kalender."}, status=403)
     pk = (request.POST.get("pk") or "").strip()
     if "_" in pk:
         pk = pk.split("_")[0]
@@ -508,6 +524,8 @@ def save_event_view(request):
 @login_required
 @require_POST
 def move_event_view(request, pk):
+    if not _can_write_calendar(request.user):
+        return JsonResponse({"status": "error", "message": "Keine Schreibberechtigung im Kalender."}, status=403)
     try:
         payload = json.loads(request.body.decode("utf-8"))
     except Exception:
@@ -569,6 +587,8 @@ def move_event_view(request, pk):
 @login_required
 @require_POST
 def delete_event_view(request, pk):
+    if not _can_write_calendar(request.user):
+        return JsonResponse({"status": "error", "message": "Keine Schreibberechtigung im Kalender."}, status=403)
     real_pk = pk.split("_")[0] if "_" in str(pk) else pk
     is_occurrence = "_" in str(pk)
     ev = get_object_or_404(CalendarEvent, pk=real_pk, user=request.user)
@@ -651,6 +671,8 @@ def ical_feed_view(request):
 @login_required
 @require_POST
 def save_category_view(request):
+    if not _can_write_calendar(request.user):
+        return JsonResponse({"status": "error", "message": "Keine Schreibberechtigung."}, status=403)
     pk = (request.POST.get("pk") or "").strip()
     cat = get_object_or_404(CalendarCategory, pk=pk, user=request.user) if pk else CalendarCategory(user=request.user)
     cat.name = (request.POST.get("name") or "").strip()[:80]
