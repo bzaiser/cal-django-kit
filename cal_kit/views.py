@@ -914,6 +914,7 @@ def event_billing_view(request, pk):
     return render(request, "cal_kit/event_billing.html", {
         "event": ev,
         "summary": summary,
+        "has_finance_kit": apps.is_installed("finance_kit"),
         "cal_labels": get_cal_profile_labels(),
         "cal_active_tab": "billing",
     })
@@ -998,3 +999,56 @@ def event_credit_note_pdf_view(request, pk):
     except Exception:
         pass
     return HttpResponse(html)
+
+
+@login_required
+@require_POST
+def event_billing_to_finance_view(request, pk):
+    ev = get_object_or_404(CalendarEvent.objects.select_related("offering_template"), pk=pk)
+    if not (_has_shared_editor_access(request.user) or ev.user_id == request.user.id):
+        return HttpResponse("Kein Zugriff.", status=403)
+    if not apps.is_installed("finance_kit"):
+        messages.warning(request, "finance_kit ist nicht installiert.")
+        return redirect("cal_kit:event_billing", pk=ev.id)
+    from finance_kit.models import LedgerEntry
+    from finance_kit.services import next_doc_number
+
+    summary = get_event_billing_summary(ev)
+    created = 0
+    if summary["paid_revenue"] > 0:
+        _, was_created = LedgerEntry.objects.get_or_create(
+            source_ref=f"cal_event:{ev.id}:income",
+            defaults={
+                "date": timezone.localdate(),
+                "entry_type": "income",
+                "sphere": "zweckbetrieb",
+                "amount": summary["paid_revenue"],
+                "description": f"Kurs-Einnahmen: {ev.title}"[:220],
+                "category_name": "Kurs- & Teilnahmegebühren",
+                "receipt_number": next_doc_number("BEL", LedgerEntry, "receipt_number"),
+                "created_by": request.user,
+            },
+        )
+        if was_created:
+            created += 1
+    if summary["honorarium"] > 0:
+        _, was_created = LedgerEntry.objects.get_or_create(
+            source_ref=f"cal_event:{ev.id}:honorarium",
+            defaults={
+                "date": timezone.localdate(),
+                "entry_type": "expense",
+                "sphere": "zweckbetrieb",
+                "amount": summary["honorarium"],
+                "description": f"Dozenten-Honorar: {ev.title}"[:220],
+                "category_name": "Dozenten-Honorar",
+                "receipt_number": next_doc_number("BEL", LedgerEntry, "receipt_number"),
+                "person_ref": ev.instructor_ref[:64],
+                "person_name": ev.instructor_name[:140],
+                "tax_exempt_paragraph": "3_26" if request.POST.get("use_3_26") == "on" else "",
+                "created_by": request.user,
+            },
+        )
+        if was_created:
+            created += 1
+    messages.success(request, f"{created} Buchung(en) ins Finanzjournal übernommen.")
+    return redirect("cal_kit:event_billing", pk=ev.id)

@@ -21,4 +21,5 @@ urlpatterns = [
     path("events/<int:pk>/billing/", views.event_billing_view, name="event_billing"),
     path("events/<int:pk>/billing/csv/", views.event_billing_csv_view, name="event_billing_csv"),
     path("events/<int:pk>/billing/credit-note.pdf", views.event_credit_note_pdf_view, name="event_credit_note_pdf"),
+    path("events/<int:pk>/billing/to-finance/", views.event_billing_to_finance_view, name="event_billing_to_finance"),
 ]

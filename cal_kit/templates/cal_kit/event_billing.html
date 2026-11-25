@@ -16,6 +16,13 @@
         <a href="{% url 'cal_kit:calendar' %}?date={{ event.start_at|date:'Y-m-d' }}&event={{ event.id }}" class="btn btn-sm btn-outline-secondary rounded-pill px-3"><i class="bi bi-calendar3 me-1"></i>Termin öffnen</a>
         <a href="{% url 'cal_kit:event_billing_csv' event.id %}" class="btn btn-sm btn-outline-secondary rounded-pill px-3"><i class="bi bi-filetype-csv me-1"></i>CSV-Export</a>
         <a href="{% url 'cal_kit:event_credit_note_pdf' event.id %}" target="_blank" class="btn btn-sm btn-outline-success rounded-pill px-3"><i class="bi bi-file-earmark-pdf me-1"></i>Honorargutschrift (PDF)</a>
+        {% if has_finance_kit %}
+        <form method="post" action="{% url 'cal_kit:event_billing_to_finance' event.id %}" class="d-inline">
+            {% csrf_token %}
+            <input type="hidden" name="use_3_26" value="on">
+            <button type="submit" class="btn btn-sm btn-success rounded-pill px-3"><i class="bi bi-journal-arrow-up me-1"></i>Ins Finanzjournal</button>
+        </form>
+        {% endif %}
         <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3" onclick="window.print()"><i class="bi bi-printer me-1"></i>Drucken</button>
     </div>
 </div>
