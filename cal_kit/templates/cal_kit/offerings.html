@@ -17,10 +17,53 @@
     </button>
 </div>
 
+<form method="get" class="card shadow-sm border-0 mb-3">
+    <div class="card-body py-2 px-3">
+        <div class="row g-2 align-items-center">
+            <div class="col-md-3">
+                <input type="search" name="q" value="{{ q }}" class="form-control form-control-sm" placeholder="Suchen (Titel, Dozent …)">
+            </div>
+            <div class="col-auto">
+                <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Nur Aktive</option>
+                    <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>Nur Inaktive</option>
+                    <option value="all" {% if status_filter == 'all' %}selected{% endif %}>Alle Status</option>
+                </select>
+            </div>
+            {% if programs %}
+            <div class="col-auto">
+                <select name="program" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <option value="">Alle Programme</option>
+                    <option value="default" {% if program_filter == 'default' %}selected{% endif %}>Standard (Jahresprogramm)</option>
+                    {% for prog in programs %}
+                    <option value="{{ prog.id }}" {% if program_filter == prog.id|stringformat:'s' %}selected{% endif %}>{{ prog.title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+            <div class="col-auto">
+                <select name="sort" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <option value="position" {% if sort_by == 'position' %}selected{% endif %}>Sortierung: Reihenfolge</option>
+                    <option value="title" {% if sort_by == 'title' %}selected{% endif %}>Titel (A–Z)</option>
+                    <option value="-title" {% if sort_by == '-title' %}selected{% endif %}>Titel (Z–A)</option>
+                    <option value="instructor" {% if sort_by == 'instructor' %}selected{% endif %}>Dozent (A–Z)</option>
+                    <option value="-created" {% if sort_by == '-created' %}selected{% endif %}>Neueste zuerst</option>
+                </select>
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-sm btn-outline-primary rounded-pill px-3"><i class="bi bi-funnel me-1"></i>Filtern</button>
+                {% if q or status_filter != 'active' or program_filter or sort_by != 'position' %}
+                <a href="{% url 'cal_kit:offering_list' %}" class="btn btn-sm btn-link text-muted">Zurücksetzen</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</form>
+
 <div class="row g-3" id="calOfferingsGrid">
     {% for o in offerings %}
     <div class="col-12 col-lg-6 cal-offering-card" data-id="{{ o.id }}">
-        <div class="card shadow-sm h-100">
+        <div class="card shadow-sm h-100 {% if not o.is_active %}opacity-75{% endif %}">
             <div class="card-body p-3 d-flex flex-column justify-content-between gap-2">
                 <div class="d-flex justify-content-between align-items-start gap-3">
                     <div class="flex-grow-1 min-w-0">
@@ -29,7 +72,8 @@
                             <span class="badge bg-body-secondary text-body border cal-offering-pos">#{{ o.position }}</span>
                             <h5 class="fw-bold mb-0">{{ o.title }}</h5>
                             {% if o.category %}<span class="badge bg-body-secondary text-body border">{{ o.category.name }}</span>{% endif %}
-                            {% if o.show_in_program %}<span class="badge text-bg-success">Im Programm</span>{% endif %}
+                            {% if o.program %}<span class="badge bg-info-subtle text-info-emphasis border">{{ o.program.title }}</span>{% endif %}
+                            {% if not o.is_active %}<span class="badge text-bg-secondary">Inaktiv</span>{% elif o.show_in_program %}<span class="badge text-bg-success">Im Programm</span>{% endif %}
                         </div>
                         {% if o.instructor_name %}<div class="small text-primary fw-semibold">{{ cal_labels.instructor_label }}: {{ o.instructor_name }}</div>{% endif %}
                         {% if o.responsible_name %}<div class="small text-muted">{{ cal_labels.responsible_label }}: {{ o.responsible_name }}</div>{% endif %}
@@ -53,6 +97,17 @@
                         {% if o.preview_url %}
                         <a href="{{ o.preview_url }}" target="_blank" class="btn btn-sm btn-outline-secondary rounded-pill px-3" title="Vorschau im Programm-Format"><i class="bi bi-eye me-1"></i>Vorschau</a>
                         {% endif %}
+                        <form method="post" action="{% url 'cal_kit:offering_duplicate' o.id %}" class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-outline-secondary rounded-pill" title="Angebot kopieren"><i class="bi bi-copy"></i></button>
+                        </form>
+                        <form method="post" action="{% url 'cal_kit:offering_toggle_active' o.id %}" class="d-inline">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <button type="submit" class="btn btn-sm {% if o.is_active %}btn-outline-warning{% else %}btn-outline-success{% endif %} rounded-pill" title="{% if o.is_active %}Deaktivieren{% else %}Aktivieren{% endif %}">
+                                <i class="bi {% if o.is_active %}bi-pause-circle{% else %}bi-play-circle{% endif %}"></i>
+                            </button>
+                        </form>
                         <button type="button" class="btn btn-sm btn-outline-primary rounded-pill" data-bs-toggle="modal" data-bs-target="#editOfferingModal-{{ o.id }}"><i class="bi bi-pencil"></i></button>
                         <form method="post" action="{% url 'cal_kit:offering_delete' o.id %}" class="d-inline">
                             {% csrf_token %}

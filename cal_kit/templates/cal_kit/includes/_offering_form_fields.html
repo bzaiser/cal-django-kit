@@ -120,6 +120,22 @@
         <label class="form-label small fw-semibold mb-1">oder Bild-URL</label>
         <input type="url" name="image_url" class="form-control form-control-sm" value="{{ o.image_url|default:'' }}">
     </div>
+    <div class="col-md-6">
+        <label class="form-label small fw-semibold mb-1">Programm (Webseite)</label>
+        <select name="program" class="form-select form-select-sm">
+            <option value="">— Standard ({{ cal_labels.program_title|default:"Jahresprogramm" }}) —</option>
+            {% for prog in programs %}
+            <option value="{{ prog.id }}" {% if o.program_id == prog.id %}selected{% endif %}>{{ prog.title }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-6 d-flex flex-column justify-content-end">
+        <input type="hidden" name="is_active_present" value="1">
+        <div class="form-check mb-1">
+            <input type="checkbox" name="is_active" id="offActive-{{ o.id|default:'new' }}" class="form-check-input" {% if not o or o.is_active %}checked{% endif %}>
+            <label class="form-check-label small fw-semibold" for="offActive-{{ o.id|default:'new' }}">Aktiv (in Kalender-Auswahl &amp; Programm)</label>
+        </div>
+    </div>
     <div class="col-12">
         <div class="p-2 ds-risk-public">
             <div class="form-check m-0">

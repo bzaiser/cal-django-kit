@@ -2,12 +2,14 @@ import csv
 from datetime import datetime, timedelta
 import json
 import logging
+import os
 import re
 
 from django.apps import apps
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.files.base import ContentFile
 from django.db.models import Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -17,7 +19,7 @@ from django.utils.translation import gettext as _
 from django.views.decorators.http import require_POST
 
 from .ical import events_to_ics
-from .models import RECURRENCE_CHOICES, CalendarCategory, CalendarEvent, CalendarEventException, OfferingTemplate
+from .models import RECURRENCE_CHOICES, CalendarCategory, CalendarEvent, CalendarEventException, OfferingTemplate, Program
 from .services import (
     get_cal_profile_labels,
     get_contract_options,
@@ -170,7 +172,7 @@ def calendar_view(request):
         "categories": categories,
         "location_options": location_options,
         "instructors": instructors,
-        "offering_templates": OfferingTemplate.objects.order_by("position", "title", "id"),
+        "offering_templates": OfferingTemplate.objects.filter(is_active=True).order_by("position", "title", "id"),
         "can_write_calendar": _can_write_calendar(request.user),
         "cal_labels": get_cal_profile_labels(),
         "cal_active_tab": "calendar",
@@ -770,6 +772,10 @@ def offering_list_view(request):
             except Exception:
                 pass
         tpl.show_in_program = bool(request.POST.get("show_in_program"))
+        if "is_active_present" in request.POST:
+            tpl.is_active = bool(request.POST.get("is_active"))
+        prog_id = (request.POST.get("program") or "").strip()
+        tpl.program = Program.objects.filter(pk=int(prog_id)).first() if prog_id.isdigit() else None
         raw_pos = (request.POST.get("position") or "").strip()
         if raw_pos.isdigit():
             tpl.position = int(raw_pos)
@@ -786,12 +792,44 @@ def offering_list_view(request):
         messages.success(request, f"{cal_labels['offering_singular']} „{tpl.title}“ gespeichert.")
         return redirect("cal_kit:offering_list")
 
-    qs = OfferingTemplate.objects.select_related("category", "user").prefetch_related("events").order_by("position", "title", "id")
+    status_filter = (request.GET.get("status") or "active").strip()
+    if status_filter not in ("active", "inactive", "all"):
+        status_filter = "active"
+    program_filter = (request.GET.get("program") or "").strip()
+    sort_by = (request.GET.get("sort") or "position").strip()
+    q = (request.GET.get("q") or "").strip()
+
+    sort_map = {
+        "position": ("position", "title", "id"),
+        "title": ("title", "id"),
+        "-title": ("-title", "id"),
+        "instructor": ("instructor_name", "title", "id"),
+        "-created": ("-created_at", "-id"),
+    }
+    if sort_by not in sort_map:
+        sort_by = "position"
+
+    qs = OfferingTemplate.objects.select_related("category", "program", "user").prefetch_related("events")
     if not can_manage:
         qs = qs.filter(user=request.user)
+    if status_filter == "active":
+        qs = qs.filter(is_active=True)
+    elif status_filter == "inactive":
+        qs = qs.filter(is_active=False)
+    if program_filter == "default":
+        qs = qs.filter(program__isnull=True)
+    elif program_filter.isdigit():
+        qs = qs.filter(program_id=int(program_filter))
+    if q:
+        qs = qs.filter(
+            Q(title__icontains=q)
+            | Q(instructor_name__icontains=q)
+            | Q(description__icontains=q)
+        )
+    qs = qs.order_by(*sort_map[sort_by])
+
     offerings_list = list(qs)
     if apps.is_installed("site_kit"):
-        from django.urls import reverse
         for obj in offerings_list:
             try:
                 obj.preview_url = reverse("site_kit:offering_preview", args=[obj.id])
@@ -801,11 +839,16 @@ def offering_list_view(request):
     return render(request, "cal_kit/offerings.html", {
         "offerings": offerings_list,
         "categories": categories,
+        "programs": list(Program.objects.all()),
         "instructors": _get_domain_instructors(),
         "location_options": _get_domain_location_options(),
         "contract_options": get_contract_options(),
         "cal_labels": cal_labels,
         "cal_active_tab": "offerings",
+        "status_filter": status_filter,
+        "program_filter": program_filter,
+        "sort_by": sort_by,
+        "q": q,
     })
 
 
@@ -825,6 +868,73 @@ def offering_reorder_view(request):
             OfferingTemplate.objects.filter(pk=int(raw_id)).update(position=pos)
             pos += 10
     return JsonResponse({"ok": True})
+
+
+@login_required
+@require_POST
+def offering_duplicate_view(request, pk):
+    tpl = get_object_or_404(OfferingTemplate, pk=pk)
+    if not _can_write_calendar(request.user) or not (_has_shared_editor_access(request.user) or tpl.user_id == request.user.id):
+        return HttpResponse("Kein Zugriff.", status=403)
+    base_title = f"{tpl.title[:148]} - Kopie"
+    new_title = base_title
+    n = 2
+    while OfferingTemplate.objects.filter(title=new_title).exists():
+        suffix = f" - Kopie {n}"
+        new_title = f"{tpl.title[:160 - len(suffix)]}{suffix}"
+        n += 1
+    dup = OfferingTemplate(
+        user=request.user,
+        category=tpl.category,
+        program=tpl.program,
+        title=new_title[:160],
+        description=tpl.description,
+        bring_along_note=tpl.bring_along_note,
+        material_note=tpl.material_note,
+        default_location=tpl.default_location,
+        default_duration_minutes=tpl.default_duration_minutes,
+        min_participants=tpl.min_participants,
+        max_participants=tpl.max_participants,
+        instructor_ref=tpl.instructor_ref,
+        instructor_name=tpl.instructor_name,
+        responsible_ref=tpl.responsible_ref,
+        responsible_name=tpl.responsible_name,
+        contract_ref=tpl.contract_ref,
+        fee_amount=tpl.fee_amount,
+        fee_non_member=tpl.fee_non_member,
+        fee_reduced=tpl.fee_reduced,
+        honorarium_amount=tpl.honorarium_amount,
+        show_in_program=tpl.show_in_program,
+        is_active=True,
+        position=tpl.position + 1,
+        image_url=tpl.image_url,
+    )
+    if tpl.image:
+        try:
+            with tpl.image.open("rb") as f:
+                data = f.read()
+            dup.image.save(os.path.basename(tpl.image.name), ContentFile(data), save=False)
+        except Exception:
+            pass
+    dup.save()
+    messages.success(request, f"Kopie „{dup.title}“ angelegt.")
+    return redirect("cal_kit:offering_list")
+
+
+@login_required
+@require_POST
+def offering_toggle_active_view(request, pk):
+    tpl = get_object_or_404(OfferingTemplate, pk=pk)
+    if not _can_write_calendar(request.user) or not (_has_shared_editor_access(request.user) or tpl.user_id == request.user.id):
+        return HttpResponse("Kein Zugriff.", status=403)
+    tpl.is_active = not tpl.is_active
+    tpl.save(update_fields=["is_active"])
+    state_label = "aktiviert" if tpl.is_active else "deaktiviert"
+    messages.success(request, f"„{tpl.title}“ {state_label}.")
+    next_url = (request.POST.get("next") or "").strip()
+    if next_url.startswith("/"):
+        return redirect(next_url)
+    return redirect("cal_kit:offering_list")
 
 
 @login_required

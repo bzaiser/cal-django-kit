@@ -43,11 +43,50 @@ class CalendarCategory(models.Model):
         return self.name
 
 
+class Program(models.Model):
+    CARD_MODE_CHOICES = [
+        ("equal_max", "Einheitlich groß (Standard)"),
+        ("compact_uniform", "Kompakt mit „Mehr lesen“"),
+        ("auto", "Automatisch (Inhaltshöhe)"),
+    ]
+    title = models.CharField(max_length=140)
+    slug = models.SlugField(max_length=160, unique=True, blank=True)
+    description = models.TextField(blank=True, default="")
+    card_mode = models.CharField(max_length=24, choices=CARD_MODE_CHOICES, default="equal_max")
+    show_in_nav = models.BooleanField(default=True)
+    is_public = models.BooleanField(default=True)
+    position = models.PositiveIntegerField(default=0, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["position", "title", "id"]
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            base = slugify(self.title) or "programm"
+            cand = base
+            idx = 2
+            while Program.objects.filter(slug=cand).exclude(pk=self.pk).exists():
+                cand = f"{base}-{idx}"
+                idx += 1
+            self.slug = cand
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.title
+
+
 class OfferingTemplate(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="cal_kit_offerings",
+    )
+    program = models.ForeignKey(
+        Program,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="offerings",
     )
     category = models.ForeignKey(
         CalendarCategory,
@@ -77,6 +116,7 @@ class OfferingTemplate(models.Model):
     honorarium_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     position = models.PositiveIntegerField(default=0, db_index=True)
     show_in_program = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

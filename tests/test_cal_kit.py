@@ -571,6 +571,49 @@ class CalKitTests(TestCase):
         self.assertEqual(b_resp.status_code, 200)
         self.assertIn("2 von 4 aktiv", b_resp.content.decode("utf-8"))
 
+    def test_offering_duplicate_toggle_active_sort_and_program_filter(self):
+        from cal_kit.models import OfferingTemplate, Program
+
+        prog = Program.objects.create(title="Kinderferienprogramm")
+        tpl = OfferingTemplate.objects.create(
+            user=self.user,
+            title="Keramikwerkstatt",
+            instructor_name="Zora",
+            program=prog,
+            is_active=True,
+        )
+        # Duplicate
+        r_dup = self.client.post(f"/calendar/offerings/{tpl.id}/duplicate/")
+        self.assertEqual(r_dup.status_code, 302)
+        dup = OfferingTemplate.objects.get(title="Keramikwerkstatt - Kopie")
+        self.assertNotEqual(dup.slug, tpl.slug)
+        self.assertEqual(dup.program_id, prog.id)
+        self.assertTrue(dup.is_active)
+
+        # Toggle inactive
+        r_tog = self.client.post(f"/calendar/offerings/{tpl.id}/toggle-active/")
+        self.assertEqual(r_tog.status_code, 302)
+        tpl.refresh_from_db()
+        self.assertFalse(tpl.is_active)
+
+        # Default offering list excludes inactive, status=inactive shows it
+        r_act = self.client.get("/calendar/offerings/")
+        self.assertNotContains(r_act, f'data-id="{tpl.id}"')
+        self.assertContains(r_act, "Keramikwerkstatt - Kopie")
+
+        r_inact = self.client.get("/calendar/offerings/?status=inactive")
+        self.assertContains(r_inact, f'data-id="{tpl.id}"')
+
+        # Calendar modal dropdown excludes inactive
+        r_cal = self.client.get("/calendar/")
+        self.assertNotIn(tpl, list(r_cal.context["offering_templates"]))
+        self.assertIn(dup, list(r_cal.context["offering_templates"]))
+
+        # Filter by program & sort
+        r_prog = self.client.get(f"/calendar/offerings/?program={prog.id}&sort=title&q=Kopie")
+        self.assertEqual(r_prog.status_code, 200)
+        self.assertContains(r_prog, "Keramikwerkstatt - Kopie")
+
 
 if __name__ == "__main__":
     from django.test.runner import DiscoverRunner
