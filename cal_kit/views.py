@@ -821,6 +821,8 @@ def offering_reorder_view(request):
 @require_POST
 def offering_create_event_view(request, pk):
     tpl = get_object_or_404(OfferingTemplate, pk=pk)
+    if not _can_write_calendar(request.user) or not (_has_shared_editor_access(request.user) or tpl.user_id == request.user.id):
+        return HttpResponse("Kein Zugriff.", status=403)
     start_date_raw = (request.POST.get("start_date") or "").strip()
     start_time_raw = (request.POST.get("start_time") or "").strip()
     end_time_raw = (request.POST.get("end_time") or "").strip()
@@ -1347,13 +1349,15 @@ def event_credit_note_pdf_view(request, pk):
 @require_POST
 def event_billing_to_finance_view(request, pk):
     ev = get_object_or_404(CalendarEvent.objects.select_related("offering_template"), pk=pk)
-    if not (_has_shared_editor_access(request.user) or ev.user_id == request.user.id):
-        return HttpResponse("Kein Zugriff.", status=403)
     if not apps.is_installed("finance_kit"):
         messages.warning(request, "finance_kit ist nicht installiert.")
         return redirect("cal_kit:event_billing", pk=ev.id)
     from finance_kit.models import LedgerEntry
     from finance_kit.services import next_doc_number
+    from finance_kit.views import _has_finance_access
+
+    if not _has_finance_access(request.user, write=True):
+        return HttpResponse("Kein Zugriff auf Finanzen.", status=403)
 
     summary = get_event_billing_summary(ev)
     created = 0
