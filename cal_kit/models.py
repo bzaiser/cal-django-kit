@@ -55,6 +55,7 @@ class Program(models.Model):
     card_mode = models.CharField(max_length=24, choices=CARD_MODE_CHOICES, default="equal_max")
     show_in_nav = models.BooleanField(default=True)
     is_public = models.BooleanField(default=True)
+    is_featured = models.BooleanField(default=False)
     position = models.PositiveIntegerField(default=0, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
