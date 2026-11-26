@@ -1243,9 +1243,13 @@ def event_notify_participants_view(request, pk):
         messages.warning(request, "Keine gültigen Teilnehmer-E-Mail-Adressen gefunden.")
         return redirect("cal_kit:event_billing", pk=ev.id)
 
-    from_email = getattr(django_settings, "DEFAULT_FROM_EMAIL", "noreply@example.org")
-    msg = EmailMessage(subject=subject, body=body, from_email=from_email, to=[from_email], bcc=emails)
-    msg.send(fail_silently=False)
+    try:
+        from design_studio.branding import send_branded_email
+        send_branded_email(subject=subject, body=body, bcc=emails, channel="email")
+    except Exception:
+        from_email = getattr(django_settings, "DEFAULT_FROM_EMAIL", "noreply@example.org")
+        msg = EmailMessage(subject=subject, body=body, from_email=from_email, to=[from_email], bcc=emails)
+        msg.send(fail_silently=False)
     messages.success(request, f"Benachrichtigung an {len(emails)} Teilnehmer versendet.")
     return redirect("cal_kit:event_billing", pk=ev.id)
 
@@ -1308,10 +1312,18 @@ def event_credit_note_pdf_view(request, pk):
             pass
 
     from django.template.loader import render_to_string
+    try:
+        from design_studio.branding import get_branding_context, pdf_link_callback
+        branding_ctx = get_branding_context("pdf")
+    except Exception:
+        branding_ctx = None
+        pdf_link_callback = None
+
     html = render_to_string("cal_kit/event_credit_note_pdf.html", {
         "event": ev,
         "summary": summary,
         "org_name": org_name,
+        "branding": branding_ctx,
         "instructor_address": instructor_address,
         "instructor_tax_id": instructor_tax_id,
         "credit_note_no": f"GS-{ev.start_at:%Y}-{ev.id:04d}",
@@ -1321,7 +1333,7 @@ def event_credit_note_pdf_view(request, pk):
         from io import BytesIO
         from xhtml2pdf import pisa
         buf = BytesIO()
-        status = pisa.CreatePDF(html, dest=buf, encoding="utf-8")
+        status = pisa.CreatePDF(html, dest=buf, encoding="utf-8", link_callback=pdf_link_callback)
         if not status.err:
             resp = HttpResponse(buf.getvalue(), content_type="application/pdf")
             resp["Content-Disposition"] = f'inline; filename="gutschrift-{ev.id}.pdf"'

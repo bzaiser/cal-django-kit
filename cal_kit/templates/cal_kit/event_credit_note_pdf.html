@@ -15,7 +15,10 @@
 </style>
 </head>
 <body>
-  <div class="muted">{{ org_name }} · Honorarabrechnung (Gutschriftverfahren)</div>
+  {% if branding and branding.channel.show_logo and branding.logo_url %}
+  <div style="margin-bottom: 10px;"><img src="{{ branding.logo_url }}" style="max-height: 44px;" alt=""></div>
+  {% endif %}
+  <div class="muted">{{ branding.org_name|default:org_name }} · Honorarabrechnung (Gutschriftverfahren)</div>
   <h1>Honorargutschrift {{ credit_note_no }}</h1>
   <div class="muted">Ausstellungsdatum: {{ issued_date|date:"d.m.Y" }}</div>
 
