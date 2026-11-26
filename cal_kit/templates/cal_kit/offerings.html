@@ -50,6 +50,9 @@
                         <i class="bi bi-calendar-plus me-1"></i>Termin anlegen
                     </button>
                     <div class="d-flex gap-1">
+                        {% if o.preview_url %}
+                        <a href="{{ o.preview_url }}" target="_blank" class="btn btn-sm btn-outline-secondary rounded-pill px-3" title="Vorschau im Programm-Format"><i class="bi bi-eye me-1"></i>Vorschau</a>
+                        {% endif %}
                         <button type="button" class="btn btn-sm btn-outline-primary rounded-pill" data-bs-toggle="modal" data-bs-target="#editOfferingModal-{{ o.id }}"><i class="bi bi-pencil"></i></button>
                         <form method="post" action="{% url 'cal_kit:offering_delete' o.id %}" class="d-inline">
                             {% csrf_token %}

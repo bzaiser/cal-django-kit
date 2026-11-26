@@ -789,9 +789,17 @@ def offering_list_view(request):
     qs = OfferingTemplate.objects.select_related("category", "user").prefetch_related("events").order_by("position", "title", "id")
     if not can_manage:
         qs = qs.filter(user=request.user)
+    offerings_list = list(qs)
+    if apps.is_installed("site_kit"):
+        from django.urls import reverse
+        for obj in offerings_list:
+            try:
+                obj.preview_url = reverse("site_kit:offering_preview", args=[obj.id])
+            except Exception:
+                obj.preview_url = ""
     categories = CalendarCategory.objects.filter(Q(user=request.user) | Q(is_shared=True)).distinct()
     return render(request, "cal_kit/offerings.html", {
-        "offerings": qs,
+        "offerings": offerings_list,
         "categories": categories,
         "instructors": _get_domain_instructors(),
         "location_options": _get_domain_location_options(),
