@@ -4,6 +4,7 @@ import uuid
 
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 from django.utils.text import slugify
 
 
@@ -270,10 +271,15 @@ class CalendarEvent(models.Model):
             if curr > window_end:
                 break
 
-            # BYDAY filter for weekly recurrence
-            if self.recurrence_rule == "weekly" and weekdays and curr.weekday() not in weekdays:
-                curr = curr + timedelta(days=1)
-                continue
+            # BYDAY filter + interval for weekly recurrence
+            if self.recurrence_rule == "weekly" and weekdays:
+                curr_local = timezone.localtime(curr)
+                start_local = timezone.localtime(self.start_at)
+                start_monday = start_local.date() - timedelta(days=start_local.weekday())
+                weeks_diff = (curr_local.date() - start_monday).days // 7
+                if curr_local.weekday() not in weekdays or (interval > 1 and weeks_diff % interval != 0):
+                    curr = curr + timedelta(days=1)
+                    continue
 
             curr_end = curr + duration
             if curr_end >= window_start and curr <= window_end:

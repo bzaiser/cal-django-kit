@@ -290,7 +290,7 @@ def events_json_view(request):
 
     for ev in recurring:
         for occ_start, occ_end, occ_title in ev.get_occurrences(window_start, window_end):
-            occ_id = f"{ev.id}_{occ_start.strftime('%Y%m%d%H%M')}"
+            occ_id = f"{ev.id}_{timezone.localtime(occ_start).strftime('%Y%m%d%H%M')}"
             _add_event(ev, occ_start, occ_end, occ_title, occ_id)
 
     # Invoke configured external event providers (e.g. Buckezz list items) when no specific category filter is active

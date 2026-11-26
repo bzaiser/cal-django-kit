@@ -5,11 +5,13 @@ from django.apps import apps
 
 def get_cal_profile_labels() -> dict:
     """Return industry-profile-specific terminology for cal_kit tabs and menus."""
-    profile = ""
-    if apps.is_installed("domain_kit"):
+    from django.conf import settings as dj_settings
+
+    profile = (getattr(dj_settings, "CAL_KIT_BUSINESS_PROFILE", "") or getattr(dj_settings, "DOMAIN_KIT_BUSINESS_PROFILE", "") or "").strip().lower()
+    if not profile and apps.is_installed("domain_kit"):
         try:
             from domain_kit.models import DomainModuleSettings
-            profile = (DomainModuleSettings.get_solo().business_profile or "").strip().lower()
+            profile = (getattr(DomainModuleSettings.get_solo(), "business_profile", "") or "").strip().lower()
         except Exception:
             profile = ""
 
@@ -119,10 +121,10 @@ def get_event_billing_summary(event) -> dict:
         except Exception:
             entries = []
 
-    booked = [e for e in entries if (e.status or "").strip().lower() not in ("abgesagt", "abgelehnt")]
+    booked = [e for e in entries if (e.status or "").strip().lower() not in ("abgesagt", "abgelehnt", "cancelled", "warteliste", "waitlist")]
     paid = [e for e in booked if bool((e.custom_data_json or {}).get("is_paid"))]
-    attended = [e for e in booked if (e.status or "").strip().lower() == "teilgenommen"]
-    cancelled = [e for e in entries if (e.status or "").strip().lower() in ("abgesagt", "abgelehnt")]
+    attended = [e for e in booked if (e.status or "").strip().lower() in ("teilgenommen", "attended")]
+    cancelled = [e for e in entries if (e.status or "").strip().lower() in ("abgesagt", "abgelehnt", "cancelled")]
 
     tpl = getattr(event, "offering_template", None)
     fee = event.fee_amount if event.fee_amount is not None else (tpl.fee_amount if tpl and tpl.fee_amount is not None else Decimal("0.00"))
