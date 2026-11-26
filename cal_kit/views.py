@@ -227,17 +227,19 @@ def events_json_view(request):
         recurrence_rule="none",
         end_at__gte=window_start,
         start_at__lte=window_end,
-    ).select_related("category").distinct()
+    ).select_related("category", "offering_template").distinct()
     recurring = CalendarEvent.objects.filter(
         visible_filter,
         start_at__lte=window_end,
-    ).exclude(recurrence_rule="none").prefetch_related("exceptions").select_related("category").distinct()
+    ).exclude(recurrence_rule="none").prefetch_related("exceptions").select_related("category", "offering_template").distinct()
 
     if cat_filter is not None:
         non_recurring = non_recurring.filter(cat_filter)
         recurring = recurring.filter(cat_filter)
 
     items = []
+    is_shared_editor = _has_shared_editor_access(request.user)
+    user_inst_refs = _user_instructor_refs(request.user)
 
     def _add_event(ev, occ_start, occ_end, occ_title, occ_id):
         color = f"var(--theme-state-{ev.color_state}, var(--app-primary, #0d6efd))"
@@ -279,8 +281,8 @@ def events_json_view(request):
                 "has_own_image": bool(ev.image),
                 "read_only": (
                     ev.user_id != request.user.id
-                    and not _has_shared_editor_access(request.user)
-                    and ev.instructor_ref not in _user_instructor_refs(request.user)
+                    and not is_shared_editor
+                    and ev.instructor_ref not in user_inst_refs
                 ),
             },
         })
