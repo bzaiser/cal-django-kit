@@ -13,6 +13,7 @@ RECURRENCE_CHOICES = [
     ("weekly", "Wöchentlich"),
     ("monthly", "Monatlich"),
     ("yearly", "Jährlich"),
+    ("custom", "Freie Einzeltermine"),
 ]
 
 WEEKDAY_CHOICES = [
@@ -155,6 +156,8 @@ class CalendarEvent(models.Model):
     recurrence_until = models.DateField(null=True, blank=True)
     # Comma-separated weekday numbers 0=Mon…6=Sun, only used when rule=weekly
     recurrence_weekdays = models.CharField(max_length=20, blank=True, default="")
+    # List of {"date": "YYYY-MM-DD", "start": "HH:MM", "end": "HH:MM"} when rule=custom
+    custom_dates_json = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -209,6 +212,45 @@ class CalendarEvent(models.Model):
                     yield (exc.new_start or self.start_at, exc.new_end or self.end_at, exc.new_title or self.title)
                 else:
                     yield (self.start_at, self.end_at, self.title)
+            return
+
+        if self.recurrence_rule == "custom":
+            tz = self.start_at.tzinfo
+            default_st = self.start_at.timetz() if tz else self.start_at.time()
+            raw_list = self.custom_dates_json if isinstance(self.custom_dates_json, list) else []
+            for item in raw_list:
+                if not isinstance(item, dict) or not item.get("date"):
+                    continue
+                try:
+                    d_obj = datetime.strptime(str(item["date"])[:10], "%Y-%m-%d").date()
+                    st_str = str(item.get("start") or "").strip()
+                    en_str = str(item.get("end") or "").strip()
+                    if st_str and ":" in st_str:
+                        hh, mm = [int(x) for x in st_str.split(":", 1)]
+                        dt_s = datetime.combine(d_obj, datetime.min.time()).replace(hour=hh, minute=mm)
+                    else:
+                        dt_s = datetime.combine(d_obj, default_st.replace(tzinfo=None))
+                    if tz:
+                        dt_s = dt_s.replace(tzinfo=tz)
+                    if en_str and ":" in en_str:
+                        eh, em = [int(x) for x in en_str.split(":", 1)]
+                        dt_e = datetime.combine(d_obj, datetime.min.time()).replace(hour=eh, minute=em)
+                        if tz:
+                            dt_e = dt_e.replace(tzinfo=tz)
+                        if dt_e <= dt_s:
+                            dt_e = dt_s + duration
+                    else:
+                        dt_e = dt_s + duration
+                except Exception:
+                    continue
+                if dt_e >= window_start and dt_s <= window_end:
+                    exc = exc_map.get(dt_s)
+                    if exc and exc.cancelled:
+                        continue
+                    if exc and (exc.new_start or exc.new_end):
+                        yield (exc.new_start or dt_s, exc.new_end or dt_e, exc.new_title or self.title)
+                    else:
+                        yield (dt_s, dt_e, self.title)
             return
 
         until_dt = None

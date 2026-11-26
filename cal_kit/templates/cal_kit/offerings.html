@@ -91,18 +91,24 @@
                     </div>
                     <div class="col-md-6">
                         <label class="form-label small fw-semibold mb-1">Wiederholung</label>
-                        <select name="recurrence_rule" class="form-select form-select-sm">
+                        <select name="recurrence_rule" class="form-select form-select-sm cal-rec-select">
                             <option value="none">Einmalig</option>
                             <option value="weekly">Wöchentlich</option>
                             <option value="daily">Täglich</option>
                             <option value="monthly">Monatlich</option>
+                            <option value="custom">Freie Einzeltermine (nicht aufeinanderfolgend)</option>
                         </select>
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-6 cal-rec-regular">
                         <label class="form-label small fw-semibold mb-1">Anzahl Termine (z. B. 13)</label>
                         <input type="number" min="1" max="104" name="repeat_count" class="form-control form-control-sm" placeholder="z. B. 13">
                     </div>
-                    <div class="col-12">
+                    <div class="col-12 cal-rec-custom d-none">
+                        <label class="form-label small fw-semibold mb-1">Zusätzliche Kurstage (1 gemeinsamer Kurs &amp; Anmeldung)</label>
+                        <div class="cal-custom-dates-list d-flex flex-column gap-1 mb-1"></div>
+                        <button type="button" class="btn btn-xs btn-sm btn-outline-primary rounded-pill cal-add-custom-date">+ Weiteren Kurstag hinzufügen</button>
+                    </div>
+                    <div class="col-12 cal-rec-regular">
                         <label class="form-label small fw-semibold mb-1">Wochentage (bei wöchentlich)</label>
                         <div class="d-flex flex-wrap gap-2 small">
                             <label class="form-check-label"><input type="checkbox" name="recurrence_weekdays" value="0" class="form-check-input"> Mo</label>
@@ -183,6 +189,38 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     }
+    document.querySelectorAll('.cal-rec-select').forEach(function (sel) {
+        var modal = sel.closest('.modal-body');
+        function toggleRec() {
+            var isCustom = sel.value === 'custom';
+            modal.querySelectorAll('.cal-rec-custom').forEach(function (el) { el.classList.toggle('d-none', !isCustom); });
+            modal.querySelectorAll('.cal-rec-regular').forEach(function (el) { el.classList.toggle('d-none', isCustom); });
+            if (isCustom) {
+                var list = modal.querySelector('.cal-custom-dates-list');
+                if (list && !list.children.length) addDateRow(modal, true);
+            }
+        }
+        sel.addEventListener('change', toggleRec);
+    });
+    function addDateRow(modal, syncFirst) {
+        var list = modal.querySelector('.cal-custom-dates-list');
+        if (!list) return;
+        var stTime = (modal.querySelector('input[name="start_time"]') || {}).value || '16:00';
+        var enTime = (modal.querySelector('input[name="end_time"]') || {}).value || '19:00';
+        var firstDate = syncFirst ? ((modal.querySelector('input[name="start_date"]') || {}).value || '') : '';
+        var row = document.createElement('div');
+        row.className = 'd-flex gap-1 align-items-center';
+        row.innerHTML = '<input type="date" name="custom_date" class="form-control form-control-sm" value="' + firstDate + '" required>'
+            + '<input type="time" name="custom_start" class="form-control form-control-sm" value="' + stTime + '" style="max-width:105px;">'
+            + '<input type="time" name="custom_end" class="form-control form-control-sm" value="' + enTime + '" style="max-width:105px;">'
+            + '<button type="button" class="btn btn-sm btn-outline-danger py-0 px-2" onclick="this.parentElement.remove()">&times;</button>';
+        list.appendChild(row);
+    }
+    document.querySelectorAll('.cal-add-custom-date').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            addDateRow(btn.closest('.modal-body'), false);
+        });
+    });
     document.querySelectorAll('.cal-offering-wysiwyg-wrap').forEach(function (wrap) {
         var ed = wrap.querySelector('.cal-offering-ed');
         var ta = wrap.querySelector('.cal-offering-desc-input');

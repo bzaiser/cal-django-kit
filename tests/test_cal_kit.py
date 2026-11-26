@@ -529,6 +529,48 @@ class CalKitTests(TestCase):
         self.assertEqual(self.client.post("/calendar/offerings/", {"title": "Hack"}).status_code, 403)
         self.assertEqual(self.client.get("/calendar/billing/").status_code, 403)
 
+    def test_custom_dates_session_cancel_append_and_notify(self):
+        from datetime import timedelta
+        from cal_kit.models import CalendarEvent, OfferingTemplate
+        self.client.force_login(self.user)
+        tpl = OfferingTemplate.objects.create(user=self.user, title="3-Tage-Workshop", fee_amount=90)
+        r = self.client.post(f"/calendar/offerings/{tpl.id}/create-event/", {
+            "start_date": "2026-06-10",
+            "start_time": "16:00",
+            "end_time": "19:00",
+            "recurrence_rule": "custom",
+            "custom_date": ["2026-06-10", "2026-06-24", "2026-07-08"],
+            "custom_start": ["16:00", "16:00", "16:00"],
+            "custom_end": ["19:00", "19:00", "19:00"],
+        })
+        self.assertEqual(r.status_code, 302)
+        ev = CalendarEvent.objects.get(title="3-Tage-Workshop")
+        self.assertEqual(ev.recurrence_rule, "custom")
+        self.assertEqual(len(ev.custom_dates_json), 3)
+        occs = list(ev.get_occurrences(ev.start_at - timedelta(days=1), ev.start_at + timedelta(days=60)))
+        self.assertEqual(len(occs), 3)
+
+        # Cancel first session and append replacement
+        r_ca = self.client.post(f"/calendar/events/{ev.id}/billing/session-action/", {
+            "action_type": "cancel_append",
+            "original_start": occs[0][0].isoformat(),
+            "replacement_date": "2026-07-22",
+        })
+        self.assertEqual(r_ca.status_code, 302)
+        ev.refresh_from_db()
+        self.assertEqual(len(ev.custom_dates_json), 4)
+        occs_after = list(ev.get_occurrences(ev.start_at - timedelta(days=1), ev.start_at + timedelta(days=60)))
+        self.assertEqual(len(occs_after), 3)
+
+        # Billing page renders sessions & prorated summary after cancel_only
+        self.client.post(f"/calendar/events/{ev.id}/billing/session-action/", {
+            "action_type": "cancel_only",
+            "original_start": occs_after[0][0].isoformat(),
+        })
+        b_resp = self.client.get(f"/calendar/events/{ev.id}/billing/")
+        self.assertEqual(b_resp.status_code, 200)
+        self.assertIn("2 von 4 aktiv", b_resp.content.decode("utf-8"))
+
 
 if __name__ == "__main__":
     from django.test.runner import DiscoverRunner

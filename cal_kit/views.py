@@ -11,6 +11,7 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext as _
 from django.views.decorators.http import require_POST
@@ -500,6 +501,16 @@ def save_event_view(request):
     raw_wd = (request.POST.get("recurrence_weekdays") or "").strip()
     valid_wd = [d for d in raw_wd.split(",") if d.strip().isdigit() and 0 <= int(d.strip()) <= 6]
     ev.recurrence_weekdays = ",".join(valid_wd) if ev.recurrence_rule == "weekly" else ""
+    if ev.recurrence_rule == "custom":
+        ev.custom_dates_json = _parse_custom_dates_from_post(request, ev.start_at, ev.end_at)
+        if ev.custom_dates_json:
+            first_d = ev.custom_dates_json[0]
+            f_start = _parse_dt(f"{first_d['date']}T{first_d['start']}")
+            f_end = _parse_dt(f"{first_d['date']}T{first_d['end']}")
+            if f_start:
+                ev.start_at = f_start
+            if f_end and f_end > ev.start_at:
+                ev.end_at = f_end
 
     # Category
     cat_id = (request.POST.get("category") or "").strip()
@@ -878,6 +889,17 @@ def offering_create_event_view(request, pk):
         elif rule == "yearly":
             until_date = base_d + timedelta(days=366 * (cnt - 1) * interval)
 
+    custom_dates = []
+    if rule == "custom":
+        custom_dates = _parse_custom_dates_from_post(request, start_dt, end_dt)
+        if custom_dates:
+            f_start = _parse_dt(f"{custom_dates[0]['date']}T{custom_dates[0]['start']}")
+            f_end = _parse_dt(f"{custom_dates[0]['date']}T{custom_dates[0]['end']}")
+            if f_start:
+                start_dt = f_start
+            if f_end and f_end > start_dt:
+                end_dt = f_end
+
     ev = CalendarEvent.objects.create(
         user=request.user,
         category=tpl.category,
@@ -902,6 +924,7 @@ def offering_create_event_view(request, pk):
         recurrence_interval=interval,
         recurrence_until=until_date,
         recurrence_weekdays=weekdays_str,
+        custom_dates_json=custom_dates,
     )
     messages.success(request, f"Termin „{ev.title}“ aus Vorlage erstellt.")
     return redirect("cal_kit:event_billing", pk=ev.id)
@@ -954,6 +977,101 @@ def billing_overview_view(request):
     })
 
 
+def _parse_custom_dates_from_post(request, fallback_start, fallback_end) -> list:
+    dates = request.POST.getlist("custom_date")
+    starts = request.POST.getlist("custom_start")
+    ends = request.POST.getlist("custom_end")
+    def_s = timezone.localtime(fallback_start).strftime("%H:%M") if fallback_start else "16:00"
+    def_e = timezone.localtime(fallback_end).strftime("%H:%M") if fallback_end else "19:00"
+    rows = []
+    seen = set()
+    for idx, d_raw in enumerate(dates):
+        d_str = (d_raw or "").strip()[:10]
+        if not d_str:
+            continue
+        try:
+            datetime.strptime(d_str, "%Y-%m-%d")
+        except ValueError:
+            continue
+        st = (starts[idx] if idx < len(starts) else def_s).strip()[:5] or def_s
+        en = (ends[idx] if idx < len(ends) else def_e).strip()[:5] or def_e
+        key = (d_str, st)
+        if key in seen:
+            continue
+        seen.add(key)
+        rows.append({"date": d_str, "start": st, "end": en})
+    if not rows and fallback_start:
+        rows.append({
+            "date": timezone.localtime(fallback_start).strftime("%Y-%m-%d"),
+            "start": def_s,
+            "end": def_e,
+        })
+    rows.sort(key=lambda x: (x["date"], x["start"]))
+    return rows
+
+
+def _build_event_session_rows(ev: CalendarEvent) -> list:
+    win_s = ev.start_at - timedelta(days=1)
+    win_e = ev.start_at + timedelta(days=730)
+    exc_map = {e.original_start: e for e in ev.exceptions.all()}
+    # Collect planned occurrences without filtering out cancelled ones by temporarily reading raw + exceptions
+    rows = []
+    if ev.recurrence_rule == "custom":
+        tz = ev.start_at.tzinfo
+        duration = ev.end_at - ev.start_at
+        for item in (ev.custom_dates_json or []):
+            if not isinstance(item, dict) or not item.get("date"):
+                continue
+            try:
+                d_obj = datetime.strptime(str(item["date"])[:10], "%Y-%m-%d").date()
+                st_str = str(item.get("start") or "16:00")
+                en_str = str(item.get("end") or "19:00")
+                hh, mm = [int(x) for x in st_str.split(":", 1)]
+                eh, em = [int(x) for x in en_str.split(":", 1)]
+                dt_s = datetime.combine(d_obj, datetime.min.time()).replace(hour=hh, minute=mm)
+                dt_e = datetime.combine(d_obj, datetime.min.time()).replace(hour=eh, minute=em)
+                if tz:
+                    dt_s = dt_s.replace(tzinfo=tz)
+                    dt_e = dt_e.replace(tzinfo=tz)
+                if dt_e <= dt_s:
+                    dt_e = dt_s + duration
+            except Exception:
+                continue
+            exc = exc_map.get(dt_s)
+            rows.append({
+                "original_start": dt_s,
+                "iso": dt_s.isoformat(),
+                "start": (exc.new_start or dt_s) if exc else dt_s,
+                "end": (exc.new_end or dt_e) if exc else dt_e,
+                "status": "cancelled" if (exc and exc.cancelled) else ("moved" if (exc and (exc.new_start or exc.new_end)) else "planned"),
+            })
+        return rows
+
+    # Regular or single event
+    active_occ = list(ev.get_occurrences(win_s, win_e, max_count=120))
+    seen_orig = set()
+    for st, en, _title in active_occ:
+        rows.append({
+            "original_start": st,
+            "iso": st.isoformat(),
+            "start": st,
+            "end": en,
+            "status": "planned",
+        })
+        seen_orig.add(st)
+    for orig_dt, exc in exc_map.items():
+        if orig_dt not in seen_orig:
+            rows.append({
+                "original_start": orig_dt,
+                "iso": orig_dt.isoformat(),
+                "start": exc.new_start or orig_dt,
+                "end": exc.new_end or (orig_dt + (ev.end_at - ev.start_at)),
+                "status": "cancelled" if exc.cancelled else "moved",
+            })
+    rows.sort(key=lambda r: r["original_start"])
+    return rows
+
+
 @login_required
 def event_billing_view(request, pk):
     ev = get_object_or_404(CalendarEvent.objects.select_related("category", "offering_template"), pk=pk)
@@ -961,13 +1079,175 @@ def event_billing_view(request, pk):
     if not can_manage and ev.instructor_ref not in _user_instructor_refs(request.user):
         return HttpResponse("Kein Zugriff.", status=403)
     summary = get_event_billing_summary(ev)
+    sessions = _build_event_session_rows(ev)
+    total_sessions = len(sessions)
+    active_sessions = sum(1 for s in sessions if s["status"] != "cancelled")
+    prorated_honorarium = (
+        (summary["honorarium"] * active_sessions / total_sessions)
+        if total_sessions > 0 and active_sessions < total_sessions
+        else summary["honorarium"]
+    )
+    prorated_fee = (
+        (summary["fee_per_person"] * active_sessions / total_sessions)
+        if total_sessions > 0 and active_sessions < total_sessions
+        else summary["fee_per_person"]
+    )
+    recipient_emails = []
+    for e in summary["entries"]:
+        if (e.status or "").lower() in ("abgesagt", "abgelehnt"):
+            continue
+        em = ((e.custom_data_json or {}).get("absender_email") or (e.custom_data_json or {}).get("email") or "").strip()
+        if em and "@" in em and em not in recipient_emails:
+            recipient_emails.append(em)
+
+    c_date = (request.GET.get("cancelled_date") or "").strip()
+    r_date = (request.GET.get("replacement_date") or "").strip()
+    if c_date and r_date:
+        default_subject = f"Terminänderung: {ev.title} (Ersatztermin {r_date})"
+        default_body = (
+            f"Guten Tag,\n\n"
+            f"leider muss der Kurstermin „{ev.title}“ am {c_date} (z. B. krankheitsbedingt) ausfallen.\n"
+            f"Als Ersatztermin wurde der {r_date} angesetzt.\n\n"
+            f"Vielen Dank für Ihr Verständnis!\n"
+            f"{ev.responsible_name or ev.instructor_name or ''}"
+        ).strip()
+    elif c_date:
+        default_subject = f"Terminausfall: {ev.title} am {c_date}"
+        default_body = (
+            f"Guten Tag,\n\n"
+            f"leider muss der Kurstermin „{ev.title}“ am {c_date} ausfallen.\n"
+            f"Die anteilige Kursgebühr wird selbstverständlich gutgeschrieben/erstattet.\n\n"
+            f"Vielen Dank für Ihr Verständnis!\n"
+            f"{ev.responsible_name or ev.instructor_name or ''}"
+        ).strip()
+    else:
+        default_subject = f"Information zum Kurs: {ev.title}"
+        default_body = f"Guten Tag,\n\nhiermit informieren wir Sie über den Kurs „{ev.title}“:\n\n"
+
     return render(request, "cal_kit/event_billing.html", {
         "event": ev,
         "summary": summary,
+        "sessions": sessions,
+        "total_sessions": total_sessions,
+        "active_sessions": active_sessions,
+        "prorated_honorarium": prorated_honorarium,
+        "prorated_fee": prorated_fee,
+        "recipient_count": len(recipient_emails),
+        "default_notify_subject": default_subject,
+        "default_notify_body": default_body,
+        "open_notify": request.GET.get("open_notify") == "1",
         "has_finance_kit": apps.is_installed("finance_kit"),
         "cal_labels": get_cal_profile_labels(),
         "cal_active_tab": "billing",
     })
+
+
+@login_required
+@require_POST
+def event_session_action_view(request, pk):
+    ev = get_object_or_404(CalendarEvent, pk=pk)
+    can_manage = _has_shared_editor_access(request.user) or ev.user_id == request.user.id
+    if not can_manage and ev.instructor_ref not in _user_instructor_refs(request.user):
+        return HttpResponse("Kein Zugriff.", status=403)
+    action_type = (request.POST.get("action_type") or "").strip()
+    orig_raw = (request.POST.get("original_start") or "").strip()
+    orig_dt = _parse_dt(orig_raw)
+    if not orig_dt:
+        messages.error(request, "Ungültiges Termindatum.")
+        return redirect("cal_kit:event_billing", pk=ev.id)
+
+    if action_type == "restore":
+        CalendarEventException.objects.filter(event=ev, original_start=orig_dt).delete()
+        messages.success(request, "Kurstag wiederhergestellt.")
+        return redirect("cal_kit:event_billing", pk=ev.id)
+
+    if action_type in ("cancel_only", "cancel_append"):
+        CalendarEventException.objects.update_or_create(
+            event=ev,
+            original_start=orig_dt,
+            defaults={"cancelled": True},
+        )
+        c_label = timezone.localtime(orig_dt).strftime("%d.%m.%Y")
+        if action_type == "cancel_append":
+            repl_raw = (request.POST.get("replacement_date") or "").strip()
+            sessions = _build_event_session_rows(ev)
+            last_dt = max((s["original_start"] for s in sessions), default=ev.start_at)
+            step_days = 1 if ev.recurrence_rule == "daily" else (30 if ev.recurrence_rule == "monthly" else 7)
+            if repl_raw:
+                try:
+                    repl_d = datetime.strptime(repl_raw[:10], "%Y-%m-%d").date()
+                except ValueError:
+                    repl_d = timezone.localtime(last_dt).date() + timedelta(days=step_days)
+            else:
+                repl_d = timezone.localtime(last_dt).date() + timedelta(days=step_days)
+
+            if ev.recurrence_rule == "custom":
+                dates = list(ev.custom_dates_json or [])
+                st_str = timezone.localtime(orig_dt).strftime("%H:%M")
+                en_str = timezone.localtime(orig_dt + (ev.end_at - ev.start_at)).strftime("%H:%M")
+                dates.append({"date": repl_d.isoformat(), "start": st_str, "end": en_str})
+                dates.sort(key=lambda x: (x.get("date", ""), x.get("start", "")))
+                ev.custom_dates_json = dates
+                ev.save(update_fields=["custom_dates_json"])
+            else:
+                if ev.recurrence_rule == "none":
+                    ev.recurrence_rule = "custom"
+                    st_str = timezone.localtime(ev.start_at).strftime("%H:%M")
+                    en_str = timezone.localtime(ev.end_at).strftime("%H:%M")
+                    ev.custom_dates_json = [
+                        {"date": timezone.localtime(ev.start_at).date().isoformat(), "start": st_str, "end": en_str},
+                        {"date": repl_d.isoformat(), "start": st_str, "end": en_str},
+                    ]
+                    ev.save(update_fields=["recurrence_rule", "custom_dates_json"])
+                else:
+                    base_until = ev.recurrence_until or timezone.localtime(last_dt).date()
+                    ev.recurrence_until = max(base_until + timedelta(days=step_days), repl_d)
+                    ev.save(update_fields=["recurrence_until"])
+            r_label = repl_d.strftime("%d.%m.%Y")
+            messages.success(request, f"Kurstag {c_label} abgesagt und Ersatztermin am {r_label} angehängt.")
+            return redirect(
+                f"{reverse('cal_kit:event_billing', args=[ev.id])}?open_notify=1&cancelled_date={c_label}&replacement_date={r_label}"
+            )
+        messages.success(request, f"Kurstag {c_label} als ausgefallen markiert (anteilige Vergütung aktiv).")
+        return redirect(f"{reverse('cal_kit:event_billing', args=[ev.id])}?open_notify=1&cancelled_date={c_label}")
+
+    return redirect("cal_kit:event_billing", pk=ev.id)
+
+
+@login_required
+@require_POST
+def event_notify_participants_view(request, pk):
+    from django.conf import settings as django_settings
+    from django.core.mail import EmailMessage
+
+    ev = get_object_or_404(CalendarEvent, pk=pk)
+    can_manage = _has_shared_editor_access(request.user) or ev.user_id == request.user.id
+    if not can_manage and ev.instructor_ref not in _user_instructor_refs(request.user):
+        return HttpResponse("Kein Zugriff.", status=403)
+    subject = (request.POST.get("subject") or "").strip()[:180] or f"Information: {ev.title}"
+    body = (request.POST.get("body") or "").strip()
+    if not body:
+        messages.error(request, "Bitte einen Nachrichtentext eingeben.")
+        return redirect("cal_kit:event_billing", pk=ev.id)
+
+    summary = get_event_billing_summary(ev)
+    emails = []
+    for e in summary["entries"]:
+        if (e.status or "").lower() in ("abgesagt", "abgelehnt"):
+            continue
+        em = ((e.custom_data_json or {}).get("absender_email") or (e.custom_data_json or {}).get("email") or "").strip()
+        if em and "@" in em and em not in emails:
+            emails.append(em)
+
+    if not emails:
+        messages.warning(request, "Keine gültigen Teilnehmer-E-Mail-Adressen gefunden.")
+        return redirect("cal_kit:event_billing", pk=ev.id)
+
+    from_email = getattr(django_settings, "DEFAULT_FROM_EMAIL", "noreply@example.org")
+    msg = EmailMessage(subject=subject, body=body, from_email=from_email, to=[from_email], bcc=emails)
+    msg.send(fail_silently=False)
+    messages.success(request, f"Benachrichtigung an {len(emails)} Teilnehmer versendet.")
+    return redirect("cal_kit:event_billing", pk=ev.id)
 
 
 @login_required

@@ -12,8 +12,11 @@
         <h3 class="fw-bold mb-0">{{ event.title }}</h3>
         <div class="small text-muted">{{ event.start_at|date:"d.m.Y H:i" }}{% if event.location %} · {{ event.location }}{% endif %}{% if event.instructor_name %} · {{ event.instructor_name }}{% endif %}</div>
     </div>
-    <div class="d-flex gap-2">
+    <div class="d-flex flex-wrap gap-2">
         <a href="{% url 'cal_kit:calendar' %}?date={{ event.start_at|date:'Y-m-d' }}&event={{ event.id }}" class="btn btn-sm btn-outline-secondary rounded-pill px-3"><i class="bi bi-calendar3 me-1"></i>Termin öffnen</a>
+        <button type="button" class="btn btn-sm btn-primary rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#notifyParticipantsModal">
+            <i class="bi bi-envelope me-1"></i>Teilnehmer benachrichtigen ({{ recipient_count }})
+        </button>
         <a href="{% url 'cal_kit:event_billing_csv' event.id %}" class="btn btn-sm btn-outline-secondary rounded-pill px-3"><i class="bi bi-filetype-csv me-1"></i>CSV-Export</a>
         <a href="{% url 'cal_kit:event_credit_note_pdf' event.id %}" target="_blank" class="btn btn-sm btn-outline-success rounded-pill px-3"><i class="bi bi-file-earmark-pdf me-1"></i>Honorargutschrift (PDF)</a>
         {% if has_finance_kit %}
@@ -34,6 +37,72 @@
     {% include "design_studio/components/kpi_card.html" with title="Offen" value=summary.open_revenue|floatformat:2 unit="€" icon="bi-hourglass-split" size="sm" state=4 %}
     {% include "design_studio/components/kpi_card.html" with title="Honorar" value=summary.honorarium|floatformat:2 unit="€" icon="bi-file-earmark-text" size="sm" state=5 %}
     {% include "design_studio/components/kpi_card.html" with title="Netto-Ergebnis" value=summary.net_result|floatformat:2 unit="€" icon="bi-graph-up" size="sm" state=6 %}
+</div>
+
+<div class="card shadow-sm mb-4">
+    <div class="card-header fw-bold d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <span><i class="bi bi-calendar-week me-1 text-primary"></i>Kurstage &amp; Ausfall-Verwaltung ({{ active_sessions }} von {{ total_sessions }} aktiv)</span>
+        {% if active_sessions < total_sessions and total_sessions > 0 %}
+        <span class="badge text-bg-warning">Anteilig ohne Ersatz: Honorar {{ prorated_honorarium|floatformat:2 }} € · Gebühr/TN {{ prorated_fee|floatformat:2 }} €</span>
+        {% endif %}
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Datum</th>
+                    <th>Uhrzeit</th>
+                    <th>Status</th>
+                    <th class="text-end">Bei Ausfall / Krankheit</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in sessions %}
+                <tr class="{% if s.status == 'cancelled' %}table-danger{% endif %}">
+                    <td class="text-muted small">{{ forloop.counter }}</td>
+                    <td class="fw-semibold">{{ s.start|date:"D, d.m.Y" }}</td>
+                    <td class="small">{{ s.start|date:"H:i" }} – {{ s.end|date:"H:i" }}</td>
+                    <td>
+                        {% if s.status == 'cancelled' %}
+                        <span class="badge text-bg-danger">Abgesagt</span>
+                        {% elif s.status == 'moved' %}
+                        <span class="badge text-bg-info">Verschoben</span>
+                        {% else %}
+                        <span class="badge text-bg-success">Geplant</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        {% if s.status == 'cancelled' %}
+                        <form method="post" action="{% url 'cal_kit:event_session_action' event.id %}" class="d-inline">
+                            {% csrf_token %}
+                            <input type="hidden" name="action_type" value="restore">
+                            <input type="hidden" name="original_start" value="{{ s.iso }}">
+                            <button type="submit" class="btn btn-sm btn-outline-secondary py-0 px-2">Wiederherstellen</button>
+                        </form>
+                        {% else %}
+                        <form method="post" action="{% url 'cal_kit:event_session_action' event.id %}" class="d-inline-flex align-items-center gap-1">
+                            {% csrf_token %}
+                            <input type="hidden" name="action_type" value="cancel_append">
+                            <input type="hidden" name="original_start" value="{{ s.iso }}">
+                            <input type="date" name="replacement_date" class="form-control form-control-sm py-0 px-1" style="width:130px;" title="Optionales Ersatzdatum (leer = automatisch hinten anhängen)">
+                            <button type="submit" class="btn btn-sm btn-outline-primary py-0 px-2">Ausfall + hinten anhängen</button>
+                        </form>
+                        <form method="post" action="{% url 'cal_kit:event_session_action' event.id %}" class="d-inline">
+                            {% csrf_token %}
+                            <input type="hidden" name="action_type" value="cancel_only">
+                            <input type="hidden" name="original_start" value="{{ s.iso }}">
+                            <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2">Ausfall (anteilig vergüten)</button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="5" class="text-center text-muted py-3">Keine Kurstage ermittelt.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
 
 <div class="card shadow-sm">
@@ -95,4 +164,38 @@
         </table>
     </div>
 </div>
+
+<div class="modal fade" id="notifyParticipantsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <form method="post" action="{% url 'cal_kit:event_notify_participants' event.id %}" class="modal-content">
+            {% csrf_token %}
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold"><i class="bi bi-envelope me-2 text-primary"></i>Teilnehmer benachrichtigen ({{ recipient_count }})</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body d-flex flex-column gap-2">
+                <div>
+                    <label class="form-label small fw-semibold mb-1">Betreff</label>
+                    <input type="text" name="subject" class="form-control form-control-sm" value="{{ default_notify_subject }}" required>
+                </div>
+                <div>
+                    <label class="form-label small fw-semibold mb-1">Nachricht (per BCC an alle aktiven Teilnehmer)</label>
+                    <textarea name="body" rows="6" class="form-control form-control-sm" required>{{ default_notify_body }}</textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3" data-bs-dismiss="modal">Abbrechen</button>
+                <button type="submit" class="btn btn-sm btn-primary rounded-pill px-4" {% if recipient_count == 0 %}disabled{% endif %}><i class="bi bi-send me-1"></i>E-Mail senden</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% if open_notify %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var mEl = document.getElementById('notifyParticipantsModal');
+    if (mEl && typeof bootstrap !== 'undefined') bootstrap.Modal.getOrCreateInstance(mEl).show();
+});
+</script>
+{% endif %}
 {% endblock %}
