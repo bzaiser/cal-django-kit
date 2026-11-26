@@ -121,9 +121,11 @@
         <input type="url" name="image_url" class="form-control form-control-sm" value="{{ o.image_url|default:'' }}">
     </div>
     <div class="col-12">
-        <div class="form-check">
-            <input type="checkbox" name="show_in_program" id="showProg-{{ o.id|default:'new' }}" class="form-check-input" {% if not o or o.show_in_program %}checked{% endif %}>
-            <label class="form-check-label small" for="showProg-{{ o.id|default:'new' }}">Im öffentlichen {{ cal_labels.program_title|default:"Programm" }} anzeigen</label>
+        <div class="p-2 ds-risk-public">
+            <div class="form-check m-0">
+                <input type="checkbox" name="show_in_program" id="showProg-{{ o.id|default:'new' }}" class="form-check-input" {% if not o or o.show_in_program %}checked{% endif %}>
+                <label class="form-check-label small fw-semibold" for="showProg-{{ o.id|default:'new' }}"><i class="bi bi-globe2 me-1 text-warning-emphasis"></i>Im öffentlichen {{ cal_labels.program_title|default:"Programm" }} anzeigen <span class="badge text-bg-warning ms-1">Öffentlich im Internet</span></label>
+            </div>
         </div>
     </div>
 </div>
