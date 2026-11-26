@@ -73,11 +73,12 @@ class OfferingTemplate(models.Model):
     fee_non_member = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     fee_reduced = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     honorarium_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    position = models.PositiveIntegerField(default=0, db_index=True)
     show_in_program = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ["title", "id"]
+        ordering = ["position", "title", "id"]
 
     def save(self, *args, **kwargs):
         if not self.slug:

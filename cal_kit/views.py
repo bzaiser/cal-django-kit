@@ -169,7 +169,7 @@ def calendar_view(request):
         "categories": categories,
         "location_options": location_options,
         "instructors": instructors,
-        "offering_templates": OfferingTemplate.objects.order_by("title"),
+        "offering_templates": OfferingTemplate.objects.order_by("position", "title", "id"),
         "can_write_calendar": _can_write_calendar(request.user),
         "cal_labels": get_cal_profile_labels(),
         "cal_active_tab": "calendar",
@@ -757,6 +757,12 @@ def offering_list_view(request):
             except Exception:
                 pass
         tpl.show_in_program = bool(request.POST.get("show_in_program"))
+        raw_pos = (request.POST.get("position") or "").strip()
+        if raw_pos.isdigit():
+            tpl.position = int(raw_pos)
+        elif not pk and tpl.position == 0:
+            max_pos = OfferingTemplate.objects.order_by("-position").values_list("position", flat=True).first() or 0
+            tpl.position = max_pos + 10
         if request.FILES.get("image"):
             tpl.image = request.FILES["image"]
         elif request.POST.get("remove_image") == "1":
@@ -767,7 +773,7 @@ def offering_list_view(request):
         messages.success(request, f"{cal_labels['offering_singular']} „{tpl.title}“ gespeichert.")
         return redirect("cal_kit:offering_list")
 
-    qs = OfferingTemplate.objects.select_related("category", "user").prefetch_related("events")
+    qs = OfferingTemplate.objects.select_related("category", "user").prefetch_related("events").order_by("position", "title", "id")
     if not can_manage:
         qs = qs.filter(user=request.user)
     categories = CalendarCategory.objects.filter(Q(user=request.user) | Q(is_shared=True)).distinct()
@@ -780,6 +786,24 @@ def offering_list_view(request):
         "cal_labels": cal_labels,
         "cal_active_tab": "offerings",
     })
+
+
+@login_required
+@require_POST
+def offering_reorder_view(request):
+    if not (_has_shared_editor_access(request.user) or getattr(request.user, "is_staff", False)):
+        return JsonResponse({"ok": False, "error": "Kein Zugriff."}, status=403)
+    try:
+        payload = json.loads(request.body.decode("utf-8"))
+        ids = payload.get("ids") or []
+    except Exception:
+        ids = request.POST.getlist("ids[]") or request.POST.getlist("ids")
+    pos = 10
+    for raw_id in ids:
+        if str(raw_id).isdigit():
+            OfferingTemplate.objects.filter(pk=int(raw_id)).update(position=pos)
+            pos += 10
+    return JsonResponse({"ok": True})
 
 
 @login_required

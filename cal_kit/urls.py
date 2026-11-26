@@ -15,6 +15,7 @@ urlpatterns = [
     path("categories/save/", views.save_category_view, name="save_category"),
     path("categories/<int:pk>/delete/", views.delete_category_view, name="delete_category"),
     path("offerings/", views.offering_list_view, name="offering_list"),
+    path("offerings/reorder/", views.offering_reorder_view, name="offering_reorder"),
     path("offerings/<int:pk>/create-event/", views.offering_create_event_view, name="offering_create_event"),
     path("offerings/<int:pk>/delete/", views.offering_delete_view, name="offering_delete"),
     path("billing/", views.billing_overview_view, name="billing_overview"),
