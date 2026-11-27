@@ -12,6 +12,18 @@
         <h3 class="fw-bold mb-0"><i class="bi bi-receipt me-2 text-primary"></i>{{ cal_labels.billing_tab|default:"Termine & Abrechnung" }}</h3>
         <div class="text-muted small">Teilnehmerzahlen, Zahlungsstatus, Honorare und Ergebnis je Termin</div>
     </div>
+    <form method="get" class="d-flex align-items-center gap-2">
+        <label for="billingYearSelect" class="small text-muted fw-semibold mb-0">Jahr:</label>
+        <select name="year" id="billingYearSelect" class="form-select form-select-sm w-auto" onchange="this.form.submit()">
+            <option value="">Alle Jahre</option>
+            {% for y in available_years %}
+            <option value="{{ y }}" {% if year_filter == y|stringformat:'s' %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+        </select>
+        {% if year_filter %}
+        <a href="{% url 'cal_kit:billing_overview' %}" class="btn btn-sm btn-link text-muted px-1">Alle</a>
+        {% endif %}
+    </form>
 </div>
 
 <div class="kpi-bento-grid mb-4">

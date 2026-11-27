@@ -674,6 +674,33 @@ class CalKitTests(TestCase):
         self.assertEqual(r_del_shared.status_code, 200)
         self.assertFalse(CalendarCategory.objects.filter(pk=shared_cat.id).exists())
 
+    def test_billing_overview_year_filter(self):
+        from cal_kit.models import CalendarEvent
+
+        CalendarEvent.objects.create(
+            user=self.user,
+            title="Kurs 2025",
+            start_at="2025-05-10T10:00Z",
+            end_at="2025-05-10T12:00Z",
+            allow_registration=True,
+        )
+        CalendarEvent.objects.create(
+            user=self.user,
+            title="Kurs 2026",
+            start_at="2026-05-10T10:00Z",
+            end_at="2026-05-10T12:00Z",
+            allow_registration=True,
+        )
+
+        r_2025 = self.client.get("/calendar/billing/?year=2025")
+        self.assertEqual(r_2025.status_code, 200)
+        self.assertContains(r_2025, "Kurs 2025")
+        self.assertNotContains(r_2025, "Kurs 2026")
+
+        r_2026 = self.client.get("/calendar/billing/?year=2026")
+        self.assertContains(r_2026, "Kurs 2026")
+        self.assertNotContains(r_2026, "Kurs 2025")
+
 
 if __name__ == "__main__":
     from django.test.runner import DiscoverRunner

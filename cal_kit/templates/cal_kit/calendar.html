@@ -398,6 +398,9 @@
                 <span class="cal-legend-item"><i class="bi bi-alarm-fill text-danger"></i> {% trans "Erinnerung" %}</span>
                 <span class="cal-legend-item"><i class="bi bi-bell-fill text-info"></i> {% trans "Alarm aktiv" %}</span>
                 <span class="cal-legend-item"><i class="bi bi-geo-alt-fill text-success"></i> {% trans "Ort" %}</span>
+                <span class="cal-legend-item ms-2">
+                    <select id="calYearJump" class="form-select form-select-sm py-0 px-2 w-auto" aria-label="{% trans 'Jahr wählen' %}" title="{% trans 'Direkt zu einem Jahr springen' %}"></select>
+                </span>
             </div>
             <div class="d-flex flex-wrap gap-1 align-items-center" id="calCategoryFilter">
                 <span class="small fw-semibold text-muted me-1"><i class="bi bi-calendar2-week me-1"></i>{% trans "Kalender:" %}</span>
@@ -1039,6 +1042,24 @@ document.addEventListener('DOMContentLoaded', function () {
         locale: 'de',
         initialView: 'dayGridMonth',
         initialDate: new URLSearchParams(window.location.search).get('date') || undefined,
+        datesSet: function (info) {
+            var ySel = document.getElementById('calYearJump');
+            if (!ySel) return;
+            var curY = (info.view && info.view.currentStart ? info.view.currentStart.getFullYear() : new Date().getFullYear());
+            var baseY = new Date().getFullYear();
+            var minY = Math.min(baseY - 2, curY - 1);
+            var maxY = Math.max(baseY + 2, curY + 1);
+            if (!ySel.options.length || Number(ySel.options[0].value) !== minY || Number(ySel.options[ySel.options.length - 1].value) !== maxY) {
+                ySel.innerHTML = '';
+                for (var y = minY; y <= maxY; y++) {
+                    var opt = document.createElement('option');
+                    opt.value = String(y);
+                    opt.textContent = String(y);
+                    ySel.appendChild(opt);
+                }
+            }
+            ySel.value = String(curY);
+        },
         eventsSet: function (events) {
             if (!targetEventId) return;
             var match = events.find(function (ev) {
@@ -1339,6 +1360,17 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
     calendar.render();
+    var calYearJumpEl = document.getElementById('calYearJump');
+    if (calYearJumpEl) {
+        calYearJumpEl.addEventListener('change', function () {
+            var y = parseInt(calYearJumpEl.value, 10);
+            if (!y) return;
+            var cur = calendar.getDate();
+            var m = String(cur.getMonth() + 1).padStart(2, '0');
+            var d = String(cur.getDate()).padStart(2, '0');
+            calendar.gotoDate(y + '-' + m + '-' + d);
+        });
+    }
 
     (function enhanceToolbarIcons() {
         var viewIcons = {

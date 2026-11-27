@@ -1092,6 +1092,13 @@ def billing_overview_view(request):
         if irefs:
             q_own |= Q(instructor_ref__in=irefs) | Q(responsible_ref__in=irefs)
         qs = qs.filter(q_own)
+    year_filter = (request.GET.get("year") or "").strip()
+    available_years = sorted(
+        {d.year for d in qs.dates("start_at", "year")} | {timezone.localdate().year},
+        reverse=True,
+    )
+    if year_filter.isdigit():
+        qs = qs.filter(start_at__year=int(year_filter))
     rows = []
     total_expected = 0
     total_paid = 0
@@ -1110,6 +1117,8 @@ def billing_overview_view(request):
         "total_net": total_net,
         "cal_labels": cal_labels,
         "cal_active_tab": "billing",
+        "year_filter": year_filter,
+        "available_years": available_years,
     })
 
 
