@@ -689,7 +689,11 @@ def save_category_view(request):
     if not _can_write_calendar(request.user):
         return JsonResponse({"status": "error", "message": "Keine Schreibberechtigung."}, status=403)
     pk = (request.POST.get("pk") or "").strip()
-    cat = get_object_or_404(CalendarCategory, pk=pk, user=request.user) if pk else CalendarCategory(user=request.user)
+    cat = (
+        get_object_or_404(CalendarCategory, Q(pk=pk) & (Q(user=request.user) | Q(is_shared=True)))
+        if pk
+        else CalendarCategory(user=request.user)
+    )
     cat.name = (request.POST.get("name") or "").strip()[:80]
     if not cat.name:
         return JsonResponse({"status": "error", "message": "Name erforderlich."}, status=400)
@@ -710,7 +714,11 @@ def save_category_view(request):
 @login_required
 @require_POST
 def delete_category_view(request, pk):
-    cat = get_object_or_404(CalendarCategory, pk=pk, user=request.user)
+    if not _can_write_calendar(request.user):
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"status": "error", "message": "Keine Schreibberechtigung."}, status=403)
+        return HttpResponse("Keine Schreibberechtigung.", status=403)
+    cat = get_object_or_404(CalendarCategory, Q(pk=pk) & (Q(user=request.user) | Q(is_shared=True)))
     cat.delete()
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
         return JsonResponse({"status": "ok"})

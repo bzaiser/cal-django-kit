@@ -614,6 +614,51 @@ class CalKitTests(TestCase):
         self.assertEqual(r_prog.status_code, 200)
         self.assertContains(r_prog, "Keramikwerkstatt - Kopie")
 
+    def test_shared_category_edit_and_delete_permissions(self):
+        from django.contrib.auth import get_user_model
+        from django.contrib.auth.models import Group
+        from cal_kit.models import CalendarCategory
+
+        Group.objects.get_or_create(name="Mitglieder")
+        User = get_user_model()
+        owner = User.objects.create_user(username="owner_cat", password="pw", is_staff=True)
+        staff2 = User.objects.create_user(username="staff2", password="pw", is_staff=True)
+        readonly = User.objects.create_user(username="readonly", password="pw", is_staff=False)
+
+        shared_cat = CalendarCategory.objects.create(user=owner, name="Kurse & Workshops", is_shared=True)
+        private_cat = CalendarCategory.objects.create(user=owner, name="Privat", is_shared=False)
+
+        c_staff = Client()
+        c_staff.login(username="staff2", password="pw")
+        r_edit_shared = c_staff.post("/calendar/categories/save/", {
+            "pk": shared_cat.id,
+            "name": "Kurse & Workshops Neu",
+            "color_state": "3",
+            "is_shared": "on",
+        }, HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        self.assertEqual(r_edit_shared.status_code, 200)
+        shared_cat.refresh_from_db()
+        self.assertEqual(shared_cat.name, "Kurse & Workshops Neu")
+
+        r_edit_priv = c_staff.post("/calendar/categories/save/", {
+            "pk": private_cat.id,
+            "name": "Hacked",
+        }, HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        self.assertEqual(r_edit_priv.status_code, 404)
+
+        r_del_priv = c_staff.post(f"/calendar/categories/{private_cat.id}/delete/", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        self.assertEqual(r_del_priv.status_code, 404)
+
+        c_ro = Client()
+        c_ro.login(username="readonly", password="pw")
+        r_ro_del = c_ro.post(f"/calendar/categories/{shared_cat.id}/delete/", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        self.assertEqual(r_ro_del.status_code, 403)
+        self.assertTrue(CalendarCategory.objects.filter(pk=shared_cat.id).exists())
+
+        r_del_shared = c_staff.post(f"/calendar/categories/{shared_cat.id}/delete/", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        self.assertEqual(r_del_shared.status_code, 200)
+        self.assertFalse(CalendarCategory.objects.filter(pk=shared_cat.id).exists())
+
 
 if __name__ == "__main__":
     from django.test.runner import DiscoverRunner
