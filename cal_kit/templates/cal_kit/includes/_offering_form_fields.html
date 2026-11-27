@@ -123,9 +123,9 @@
     <div class="col-md-6">
         <label class="form-label small fw-semibold mb-1">Programm (Webseite)</label>
         <select name="program" class="form-select form-select-sm">
-            <option value="">— Standard ({{ cal_labels.program_title|default:"Jahresprogramm" }}) —</option>
+            {% if not programs %}<option value="">— Ohne Programm —</option>{% endif %}
             {% for prog in programs %}
-            <option value="{{ prog.id }}" {% if o.program_id == prog.id %}selected{% endif %}>{{ prog.title }}</option>
+            <option value="{{ prog.id }}" {% if o.program_id == prog.id or not o and forloop.first %}selected{% endif %}>{{ prog.title }}</option>
             {% endfor %}
         </select>
     </div>

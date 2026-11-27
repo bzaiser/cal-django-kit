@@ -34,7 +34,6 @@
             <div class="col-auto">
                 <select name="program" class="form-select form-select-sm" onchange="this.form.submit()">
                     <option value="">Alle Programme</option>
-                    <option value="default" {% if program_filter == 'default' %}selected{% endif %}>Standard (Jahresprogramm)</option>
                     {% for prog in programs %}
                     <option value="{{ prog.id }}" {% if program_filter == prog.id|stringformat:'s' %}selected{% endif %}>{{ prog.title }}</option>
                     {% endfor %}
