@@ -666,6 +666,9 @@ class CalKitTests(TestCase):
 
         c_ro = Client()
         c_ro.login(username="readonly", password="pw")
+        r_ro_page = c_ro.get("/calendar/")
+        self.assertEqual(r_ro_page.status_code, 200)
+        self.assertNotContains(r_ro_page, 'id="calManageCatsBtn"')
         r_ro_del = c_ro.post(f"/calendar/categories/{shared_cat.id}/delete/", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
         self.assertEqual(r_ro_del.status_code, 403)
         self.assertTrue(CalendarCategory.objects.filter(pk=shared_cat.id).exists())
