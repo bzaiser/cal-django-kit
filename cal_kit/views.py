@@ -379,16 +379,8 @@ def _event_registration_count(event_id: int) -> int:
 
 
 def _can_write_calendar(user) -> bool:
-    if not user or not getattr(user, "is_authenticated", False):
-        return False
-    if getattr(user, "is_superuser", False) or getattr(user, "is_staff", False):
-        return True
-    from django.contrib.auth.models import Group
-    if not Group.objects.exists():
-        return True
-    return user.groups.filter(
-        name__in=("Leitung / Vorstand", "Vorstand", "Redakteur", "Pressewart", "Schriftführer", "Dozenten", "Mitarbeiter")
-    ).exists()
+    from design_studio.permissions import user_has_role
+    return user_has_role(user, "calendar_write", allow_when_no_groups=True)
 
 
 def _has_shared_editor_access(user) -> bool:
@@ -396,7 +388,8 @@ def _has_shared_editor_access(user) -> bool:
         return False
     if getattr(user, "is_superuser", False):
         return True
-    return user.groups.filter(name__in=("Redakteur", "Pressewart", "Leitung / Vorstand", "Vorstand", "Schriftführer")).exists()
+    from design_studio.permissions import get_role_group_names
+    return user.groups.filter(name__in=get_role_group_names("calendar_shared")).exists()
 
 
 @login_required
@@ -1464,6 +1457,8 @@ def event_credit_note_pdf_view(request, pk):
         branding_ctx = None
         pdf_link_callback = None
 
+    from design_studio.permissions import is_npo_profile
+
     html = render_to_string("cal_kit/event_credit_note_pdf.html", {
         "event": ev,
         "summary": summary,
@@ -1473,6 +1468,7 @@ def event_credit_note_pdf_view(request, pk):
         "instructor_tax_id": instructor_tax_id,
         "credit_note_no": f"GS-{ev.start_at:%Y}-{ev.id:04d}",
         "issued_date": timezone.localdate(),
+        "is_npo_profile": is_npo_profile(),
     })
     try:
         from io import BytesIO
