@@ -614,6 +614,21 @@ class CalKitTests(TestCase):
         self.assertEqual(r_prog.status_code, 200)
         self.assertContains(r_prog, "Keramikwerkstatt - Kopie")
 
+        # Filter by category=none (uncategorized) vs category=<id>
+        from cal_kit.models import CalendarCategory
+        cat_o = CalendarCategory.objects.create(user=self.user, name="Kurse Test", is_shared=True)
+        dup.category = cat_o
+        dup.save(update_fields=["category"])
+        tpl_uncat = OfferingTemplate.objects.create(user=self.user, title="Ohne Kat Kurs", slug="ohne-kat-kurs", is_active=True)
+
+        r_none = self.client.get("/calendar/offerings/?category=none")
+        self.assertContains(r_none, "Ohne Kat Kurs")
+        self.assertNotContains(r_none, "Keramikwerkstatt - Kopie")
+
+        r_cat = self.client.get(f"/calendar/offerings/?category={cat_o.id}")
+        self.assertContains(r_cat, "Keramikwerkstatt - Kopie")
+        self.assertNotContains(r_cat, "Ohne Kat Kurs")
+
     def test_shared_category_edit_and_delete_permissions(self):
         from django.contrib.auth import get_user_model
         from django.contrib.auth.models import Group

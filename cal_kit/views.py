@@ -804,6 +804,7 @@ def offering_list_view(request):
     if status_filter not in ("active", "inactive", "all"):
         status_filter = "active"
     program_filter = (request.GET.get("program") or "").strip()
+    category_filter = (request.GET.get("category") or "").strip()
     sort_by = (request.GET.get("sort") or "position").strip()
     q = (request.GET.get("q") or "").strip()
 
@@ -828,6 +829,10 @@ def offering_list_view(request):
         qs = qs.filter(program__isnull=True)
     elif program_filter.isdigit():
         qs = qs.filter(program_id=int(program_filter))
+    if category_filter == "none":
+        qs = qs.filter(category__isnull=True)
+    elif category_filter.isdigit():
+        qs = qs.filter(category_id=int(category_filter))
     if q:
         qs = qs.filter(
             Q(title__icontains=q)
@@ -855,6 +860,7 @@ def offering_list_view(request):
         "cal_active_tab": "offerings",
         "status_filter": status_filter,
         "program_filter": program_filter,
+        "category_filter": category_filter,
         "sort_by": sort_by,
         "q": q,
     })

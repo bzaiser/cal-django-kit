@@ -41,6 +41,15 @@
             </div>
             {% endif %}
             <div class="col-auto">
+                <select name="category" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <option value="">Alle Kategorien</option>
+                    <option value="none" {% if category_filter == 'none' %}selected{% endif %}>Ohne Kategorie</option>
+                    {% for c in categories %}
+                    <option value="{{ c.id }}" {% if category_filter == c.id|stringformat:'s' %}selected{% endif %}>{{ c.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
                 <select name="sort" class="form-select form-select-sm" onchange="this.form.submit()">
                     <option value="position" {% if sort_by == 'position' %}selected{% endif %}>Sortierung: Reihenfolge</option>
                     <option value="title" {% if sort_by == 'title' %}selected{% endif %}>Titel (A–Z)</option>
@@ -51,7 +60,7 @@
             </div>
             <div class="col-auto">
                 <button type="submit" class="btn btn-sm btn-outline-primary rounded-pill px-3"><i class="bi bi-funnel me-1"></i>Filtern</button>
-                {% if q or status_filter != 'active' or program_filter or sort_by != 'position' %}
+                {% if q or status_filter != 'active' or program_filter or category_filter or sort_by != 'position' %}
                 <a href="{% url 'cal_kit:offering_list' %}" class="btn btn-sm btn-link text-muted">Zurücksetzen</a>
                 {% endif %}
             </div>

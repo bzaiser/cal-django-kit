@@ -403,7 +403,7 @@
                 <span class="small fw-semibold text-muted me-1"><i class="bi bi-calendar2-week me-1"></i>{% trans "Kalender:" %}</span>
                 <button type="button" class="btn btn-sm rounded-pill px-3 btn-primary cal-cat-chip-all active" data-cat="">{% trans "Alle" %}</button>
                 {% if categories %}
-                <button type="button" class="btn btn-sm rounded-pill px-3 btn-outline-secondary cal-cat-chip" data-cat="personal" title="{% trans 'Termine ohne Kalender-Zuordnung' %}">{% trans "Persönlich" %}</button>
+                <button type="button" class="btn btn-sm rounded-pill px-3 btn-outline-secondary cal-cat-chip" data-cat="personal" title="{% trans 'Persönliche Termine & Termine ohne Kategorie-Zuordnung' %}">{% trans "Ohne Kategorie" %}</button>
                 {% for cat in categories %}
                 <button type="button" class="btn btn-sm rounded-pill px-3 btn-outline-secondary cal-cat-chip"
                         data-cat="{{ cat.id }}"
