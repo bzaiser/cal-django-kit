@@ -765,6 +765,18 @@
                             <button type="button" class="cal-icon-btn" data-icon="bi-cake2-fill" title="{% trans 'Geburtstag' %}"><i class="bi bi-cake2-fill"></i></button>
                             <button type="button" class="cal-icon-btn" data-icon="bi-check2-square" title="{% trans 'Aufgaben' %}"><i class="bi bi-check2-square"></i></button>
                             <button type="button" class="cal-icon-btn" data-icon="bi-star-fill" title="{% trans 'Wichtig' %}"><i class="bi bi-star-fill"></i></button>
+                            <button type="button" class="cal-icon-btn d-none" id="calCatIconCustomBtn" data-icon="" title="{% trans 'Gewähltes Symbol' %}"></button>
+                            <button type="button" class="cal-icon-btn px-2 ms-auto" id="calCatIconMoreBtn" style="width:auto;" title="{% trans 'Alle Symbole durchsuchen' %}"><i class="bi bi-grid-3x3-gap me-1"></i>{% trans "Weitere" %}</button>
+                        </div>
+                        <div id="calCatIconPickerPanel" class="d-none border rounded p-2 mt-2 bg-body-tertiary">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <input type="search" id="calCatIconSearch" class="form-control form-control-sm" placeholder="{% trans 'Symbol suchen (z. B. palette, sun, brush, music …)' %}">
+                                <span id="calCatIconCount" class="small text-muted text-nowrap"></span>
+                            </div>
+                            <div id="calCatIconGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(34px,1fr));gap:4px;max-height:210px;overflow-y:auto;"></div>
+                            <div class="text-center mt-2 d-none" id="calCatIconShowAllWrap">
+                                <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3" id="calCatIconShowAllBtn">{% trans "Alle anzeigen" %}</button>
+                            </div>
                         </div>
                     </div>
                     <div class="mb-3">
@@ -1588,8 +1600,127 @@ document.addEventListener('DOMContentLoaded', function () {
         var s = String(val || '');
         var inp = document.getElementById('calCatIcon');
         if (inp) inp.value = s;
-        document.querySelectorAll('#calCatIconSwatches .cal-icon-btn').forEach(function (b) {
-            b.classList.toggle('active', b.dataset.icon === s);
+        var matchedPreset = false;
+        document.querySelectorAll('#calCatIconSwatches .cal-icon-btn[data-icon]').forEach(function (b) {
+            if (b.id === 'calCatIconCustomBtn') return;
+            var hit = b.dataset.icon === s;
+            b.classList.toggle('active', hit);
+            if (hit) matchedPreset = true;
+        });
+        var customBtn = document.getElementById('calCatIconCustomBtn');
+        if (customBtn) {
+            if (s && !matchedPreset) {
+                customBtn.dataset.icon = s;
+                customBtn.title = s;
+                customBtn.innerHTML = '<i class="bi ' + s.replace(/[^a-z0-9-]/gi, '') + '"></i>';
+                customBtn.classList.remove('d-none');
+                customBtn.classList.add('active');
+            } else {
+                customBtn.dataset.icon = '';
+                customBtn.innerHTML = '';
+                customBtn.classList.add('d-none');
+                customBtn.classList.remove('active');
+            }
+        }
+    }
+    var catIconPanelEl = document.getElementById('calCatIconPickerPanel');
+    var catIconMoreBtn = document.getElementById('calCatIconMoreBtn');
+    var catIconSearchEl = document.getElementById('calCatIconSearch');
+    var catIconGridEl = document.getElementById('calCatIconGrid');
+    var catIconCountEl = document.getElementById('calCatIconCount');
+    var catIconShowAllWrap = document.getElementById('calCatIconShowAllWrap');
+    var catIconShowAllBtn = document.getElementById('calCatIconShowAllBtn');
+    var _cachedBiIcons = null;
+    var _showAllIcons = false;
+
+    function extractIconsFromCssText(cssText) {
+        var set = new Set();
+        var re = /\.bi-([a-z0-9-]+)::before/g;
+        var m;
+        while ((m = re.exec(cssText)) !== null) {
+            set.add('bi-' + m[1]);
+        }
+        return Array.from(set).sort();
+    }
+    function loadAllBootstrapIcons() {
+        if (_cachedBiIcons) return Promise.resolve(_cachedBiIcons);
+        var set = new Set();
+        try {
+            Array.from(document.styleSheets || []).forEach(function (sheet) {
+                if (!sheet.href || sheet.href.indexOf('bootstrap-icons') === -1) return;
+                Array.from(sheet.cssRules || []).forEach(function (rule) {
+                    if (!rule.selectorText) return;
+                    var matches = rule.selectorText.match(/\.bi-([a-z0-9-]+)::before/g);
+                    if (matches) {
+                        matches.forEach(function (sel) {
+                            set.add(sel.replace(/^\./, '').replace(/::before$/, ''));
+                        });
+                    }
+                });
+            });
+        } catch (e) {}
+        if (set.size > 50) {
+            _cachedBiIcons = Array.from(set).sort();
+            return Promise.resolve(_cachedBiIcons);
+        }
+        var link = document.querySelector('link[href*="bootstrap-icons"]');
+        if (!link || !link.href) return Promise.resolve([]);
+        return fetch(link.href).then(function (r) { return r.text(); }).then(function (txt) {
+            _cachedBiIcons = extractIconsFromCssText(txt);
+            return _cachedBiIcons;
+        }).catch(function () { return []; });
+    }
+    function renderCatIconGrid(icons) {
+        if (!catIconGridEl) return;
+        var q = ((catIconSearchEl && catIconSearchEl.value) || '').trim().toLowerCase();
+        var filtered = q ? icons.filter(function (ic) { return ic.indexOf(q) !== -1; }) : icons;
+        var limit = (q || _showAllIcons) ? filtered.length : 120;
+        var slice = filtered.slice(0, limit);
+        var current = (document.getElementById('calCatIcon') && document.getElementById('calCatIcon').value) || '';
+        catIconGridEl.innerHTML = '';
+        var frag = document.createDocumentFragment();
+        slice.forEach(function (ic) {
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'cal-icon-btn' + (ic === current ? ' active' : '');
+            btn.dataset.icon = ic;
+            btn.title = ic.replace(/^bi-/, '');
+            var iconEl = document.createElement('i');
+            iconEl.className = 'bi ' + ic;
+            btn.appendChild(iconEl);
+            btn.addEventListener('click', function () {
+                setCatIcon(ic);
+                if (catIconPanelEl) catIconPanelEl.classList.add('d-none');
+            });
+            frag.appendChild(btn);
+        });
+        catIconGridEl.appendChild(frag);
+        if (catIconCountEl) catIconCountEl.textContent = filtered.length + ' Symbole';
+        if (catIconShowAllWrap) {
+            catIconShowAllWrap.classList.toggle('d-none', filtered.length <= limit);
+        }
+    }
+    if (catIconMoreBtn && catIconPanelEl) {
+        catIconMoreBtn.addEventListener('click', function () {
+            var opening = catIconPanelEl.classList.contains('d-none');
+            catIconPanelEl.classList.toggle('d-none', !opening);
+            if (opening) {
+                loadAllBootstrapIcons().then(function (icons) {
+                    renderCatIconGrid(icons);
+                    if (catIconSearchEl) catIconSearchEl.focus();
+                });
+            }
+        });
+    }
+    if (catIconSearchEl) {
+        catIconSearchEl.addEventListener('input', function () {
+            loadAllBootstrapIcons().then(renderCatIconGrid);
+        });
+    }
+    if (catIconShowAllBtn) {
+        catIconShowAllBtn.addEventListener('click', function () {
+            _showAllIcons = true;
+            loadAllBootstrapIcons().then(renderCatIconGrid);
         });
     }
     function resetCatForm() {
@@ -1602,6 +1733,9 @@ document.addEventListener('DOMContentLoaded', function () {
         if (sh) sh.checked = false;
         var pb = document.getElementById('calCatPublicDefault');
         if (pb) pb.checked = false;
+        if (catIconPanelEl) catIconPanelEl.classList.add('d-none');
+        if (catIconSearchEl) catIconSearchEl.value = '';
+        _showAllIcons = false;
         setCatColor(1);
         setCatIcon('');
     }
@@ -1609,7 +1743,7 @@ document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('#calCatColorSwatches .ds-color-swatch-btn').forEach(function (b) {
         b.addEventListener('click', function () { setCatColor(b.dataset.state); });
     });
-    document.querySelectorAll('#calCatIconSwatches .cal-icon-btn').forEach(function (b) {
+    document.querySelectorAll('#calCatIconSwatches .cal-icon-btn[data-icon]').forEach(function (b) {
         b.addEventListener('click', function () { setCatIcon(b.dataset.icon); });
     });
     if (document.getElementById('calCatResetBtn')) {
