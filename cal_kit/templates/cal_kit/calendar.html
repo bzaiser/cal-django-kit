@@ -401,6 +401,15 @@
             </div>
             <div class="d-flex flex-wrap gap-1 align-items-center" id="calCategoryFilter">
                 <span class="small fw-semibold text-muted me-1"><i class="bi bi-calendar2-week me-1"></i>{% trans "Kalender:" %}</span>
+                {% if categories %}
+                <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-2 me-1" id="calManageCatsBtn" title="{% trans 'Kalender & Kategorien verwalten' %}">
+                    <i class="bi bi-gear me-1"></i>{% trans "Verwalten" %}
+                </button>
+                {% else %}
+                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 me-1" id="calManageCatsBtn">
+                    <i class="bi bi-gear me-1"></i>{% trans "Kalender anlegen (z. B. Vereinstermine)" %}
+                </button>
+                {% endif %}
                 <button type="button" class="btn btn-sm rounded-pill px-3 btn-primary cal-cat-chip-all active" data-cat="">{% trans "Alle" %}</button>
                 {% if categories %}
                 <button type="button" class="btn btn-sm rounded-pill px-3 btn-outline-secondary cal-cat-chip" data-cat="personal" title="{% trans 'Persönliche Termine & Termine ohne Kategorie-Zuordnung' %}">{% trans "Ohne Kategorie" %}</button>
@@ -412,13 +421,6 @@
                     <span class="rounded-circle d-inline-block me-1" style="width:8px;height:8px;background:var(--theme-state-{{ cat.color_state }}, var(--app-primary));"></span>{% if cat.icon %}<i class="bi {{ cat.icon }} me-1"></i>{% endif %}{{ cat.name }}{% if cat.is_shared %} <i class="bi bi-people-fill opacity-75 ms-1" title="{% trans 'Team-Kalender' %}"></i>{% endif %}{% if cat.is_public_default %} <i class="bi bi-globe2 opacity-75 ms-1" title="{% trans 'Standardmäßig öffentlich' %}"></i>{% endif %}
                 </button>
                 {% endfor %}
-                <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-2 ms-1" id="calManageCatsBtn" title="{% trans 'Kalender & Kategorien verwalten' %}">
-                    <i class="bi bi-sliders me-1"></i>{% trans "Verwalten" %}
-                </button>
-                {% else %}
-                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3" id="calManageCatsBtn">
-                    <i class="bi bi-plus-circle me-1"></i>{% trans "Kalender anlegen (z. B. Vereinstermine)" %}
-                </button>
                 {% endif %}
             </div>
         </div>
@@ -478,7 +480,7 @@
                             <div class="col-6">
                                 <div class="d-flex align-items-center justify-content-between mb-1">
                                     <label class="form-label small fw-semibold mb-0"><i class="bi bi-tags me-1"></i>{% trans "Kalender / Kategorie" %}</label>
-                                    <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none small" data-bs-toggle="modal" data-bs-target="#calCategoriesModal" title="{% trans 'Kalender & Kategorien verwalten' %}"><i class="bi bi-sliders me-1"></i>{% trans "Verwalten" %}</button>
+                                    <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none small" data-bs-toggle="modal" data-bs-target="#calCategoriesModal" title="{% trans 'Kalender & Kategorien verwalten' %}"><i class="bi bi-gear me-1"></i>{% trans "Verwalten" %}</button>
                                 </div>
                                 <select name="category" id="calEvCategory" class="form-select form-select-sm">
                                     <option value="">{% trans "Keine Kategorie" %}</option>
