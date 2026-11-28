@@ -1,17 +1,23 @@
+{% if can_access_offerings or can_access_billing %}
 <ul class="nav nav-tabs ds-tabs" role="tablist">
     <li class="nav-item" role="presentation">
         <a class="nav-link {% if cal_active_tab == 'calendar' %}active{% endif %}" href="{% url 'cal_kit:calendar' %}">
             <i class="bi bi-calendar3 me-1"></i>{{ cal_labels.calendar_tab|default:"Kalender" }}
         </a>
     </li>
+    {% if can_access_offerings %}
     <li class="nav-item" role="presentation">
         <a class="nav-link {% if cal_active_tab == 'offerings' %}active{% endif %}" href="{% url 'cal_kit:offering_list' %}">
             <i class="bi bi-collection me-1"></i>{{ cal_labels.offerings_tab|default:"Angebots-Vorlagen" }}
         </a>
     </li>
+    {% endif %}
+    {% if can_access_billing %}
     <li class="nav-item" role="presentation">
         <a class="nav-link {% if cal_active_tab == 'billing' %}active{% endif %}" href="{% url 'cal_kit:billing_overview' %}">
             <i class="bi bi-receipt me-1"></i>{{ cal_labels.billing_tab|default:"Termine & Abrechnung" }}
         </a>
     </li>
+    {% endif %}
 </ul>
+{% endif %}

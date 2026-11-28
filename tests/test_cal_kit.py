@@ -710,6 +710,48 @@ class CalKitTests(TestCase):
         self.assertContains(r_2026, "Kurs 2026")
         self.assertNotContains(r_2026, "Kurs 2025")
 
+    def test_role_permissions_for_pressewart_schriftfuehrer_and_kassierer(self):
+        from django.contrib.auth import get_user_model
+        from django.contrib.auth.models import Group
+
+        User = get_user_model()
+
+        g_presse, _ = Group.objects.get_or_create(name="Pressewart")
+        g_schrift, _ = Group.objects.get_or_create(name="Schriftführer")
+        g_kasse, _ = Group.objects.get_or_create(name="Buchhaltung / Kassierer")
+
+        u_presse = User.objects.create_user(username="presse_cal", password="pw")
+        u_presse.groups.add(g_presse)
+        u_schrift = User.objects.create_user(username="schrift_cal", password="pw")
+        u_schrift.groups.add(g_schrift)
+        u_kasse = User.objects.create_user(username="kasse_cal", password="pw")
+        u_kasse.groups.add(g_kasse)
+
+        # Pressewart: can read calendar, no tabs for offerings/billing, 403 on write/offerings/billing
+        self.client.force_login(u_presse)
+        r_cal = self.client.get("/calendar/")
+        self.assertEqual(r_cal.status_code, 200)
+        self.assertNotContains(r_cal, "/calendar/offerings/")
+        self.assertNotContains(r_cal, "/calendar/billing/")
+        self.assertEqual(self.client.post("/calendar/save/", {"title": "X", "start_at": "2026-06-01T10:00"}).status_code, 403)
+        self.assertEqual(self.client.get("/calendar/offerings/").status_code, 403)
+        self.assertEqual(self.client.get("/calendar/billing/").status_code, 403)
+
+        # Schriftführer: can write calendar events (e.g. meeting invitations), but no offerings/billing
+        self.client.force_login(u_schrift)
+        r_scal = self.client.get("/calendar/")
+        self.assertEqual(r_scal.status_code, 200)
+        self.assertNotContains(r_scal, "/calendar/offerings/")
+        self.assertNotContains(r_scal, "/calendar/billing/")
+        self.assertEqual(self.client.post("/calendar/save/", {"title": "Sitzung", "start_at": "2026-06-02T18:00"}).status_code, 302)
+        self.assertEqual(self.client.get("/calendar/offerings/").status_code, 403)
+        self.assertEqual(self.client.get("/calendar/billing/").status_code, 403)
+
+        # Buchhaltung / Kassierer: can access billing overview, not offerings
+        self.client.force_login(u_kasse)
+        self.assertEqual(self.client.get("/calendar/billing/").status_code, 200)
+        self.assertEqual(self.client.get("/calendar/offerings/").status_code, 403)
+
 
 if __name__ == "__main__":
     from django.test.runner import DiscoverRunner

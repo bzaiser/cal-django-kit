@@ -174,6 +174,8 @@ def calendar_view(request):
         "instructors": instructors,
         "offering_templates": OfferingTemplate.objects.filter(is_active=True).order_by("position", "title", "id"),
         "can_write_calendar": _can_write_calendar(request.user),
+        "can_access_offerings": _can_access_offerings(request.user),
+        "can_access_billing": _can_access_billing(request.user),
         "cal_labels": get_cal_profile_labels(),
         "cal_active_tab": "calendar",
     })
@@ -381,6 +383,21 @@ def _event_registration_count(event_id: int) -> int:
 def _can_write_calendar(user) -> bool:
     from design_studio.permissions import user_has_role
     return user_has_role(user, "calendar_write", allow_when_no_groups=True)
+
+
+def _can_access_offerings(user) -> bool:
+    from design_studio.permissions import user_has_role
+    return user_has_role(user, "calendar_offerings", allow_when_no_groups=True)
+
+
+def _can_access_billing(user) -> bool:
+    from design_studio.permissions import user_has_role
+    return user_has_role(user, "calendar_billing", allow_when_no_groups=True)
+
+
+def _has_billing_manage_access(user) -> bool:
+    from design_studio.permissions import user_has_role
+    return _has_shared_editor_access(user) or user_has_role(user, "finance")
 
 
 def _has_shared_editor_access(user) -> bool:
@@ -722,7 +739,7 @@ def delete_category_view(request, pk):
 
 @login_required
 def offering_list_view(request):
-    if not _can_write_calendar(request.user):
+    if not _can_access_offerings(request.user):
         return HttpResponse("Kein Zugriff.", status=403)
     cal_labels = get_cal_profile_labels()
     can_manage = _has_shared_editor_access(request.user) or getattr(request.user, "is_staff", False)
@@ -851,6 +868,8 @@ def offering_list_view(request):
         "contract_options": get_contract_options(),
         "cal_labels": cal_labels,
         "cal_active_tab": "offerings",
+        "can_access_offerings": True,
+        "can_access_billing": _can_access_billing(request.user),
         "status_filter": status_filter,
         "program_filter": program_filter,
         "category_filter": category_filter,
@@ -881,7 +900,7 @@ def offering_reorder_view(request):
 @require_POST
 def offering_duplicate_view(request, pk):
     tpl = get_object_or_404(OfferingTemplate, pk=pk)
-    if not _can_write_calendar(request.user) or not (_has_shared_editor_access(request.user) or tpl.user_id == request.user.id):
+    if not _can_access_offerings(request.user) or not (_has_shared_editor_access(request.user) or tpl.user_id == request.user.id):
         return HttpResponse("Kein Zugriff.", status=403)
     base_title = f"{tpl.title[:148]} - Kopie"
     new_title = base_title
@@ -932,7 +951,7 @@ def offering_duplicate_view(request, pk):
 @require_POST
 def offering_toggle_active_view(request, pk):
     tpl = get_object_or_404(OfferingTemplate, pk=pk)
-    if not _can_write_calendar(request.user) or not (_has_shared_editor_access(request.user) or tpl.user_id == request.user.id):
+    if not _can_access_offerings(request.user) or not (_has_shared_editor_access(request.user) or tpl.user_id == request.user.id):
         return HttpResponse("Kein Zugriff.", status=403)
     tpl.is_active = not tpl.is_active
     tpl.save(update_fields=["is_active"])
@@ -948,7 +967,7 @@ def offering_toggle_active_view(request, pk):
 @require_POST
 def offering_create_event_view(request, pk):
     tpl = get_object_or_404(OfferingTemplate, pk=pk)
-    if not _can_write_calendar(request.user) or not (_has_shared_editor_access(request.user) or tpl.user_id == request.user.id):
+    if not _can_access_offerings(request.user) or not (_has_shared_editor_access(request.user) or tpl.user_id == request.user.id):
         return HttpResponse("Kein Zugriff.", status=403)
     start_date_raw = (request.POST.get("start_date") or "").strip()
     start_time_raw = (request.POST.get("start_time") or "").strip()
@@ -1063,7 +1082,7 @@ def offering_create_event_view(request, pk):
 @require_POST
 def offering_delete_view(request, pk):
     tpl = get_object_or_404(OfferingTemplate, pk=pk)
-    if tpl.user_id != request.user.id and not _has_shared_editor_access(request.user):
+    if not _can_access_offerings(request.user) or (tpl.user_id != request.user.id and not _has_shared_editor_access(request.user)):
         return HttpResponse("Kein Zugriff.", status=403)
     tpl.delete()
     messages.success(request, "Vorlage gelöscht.")
@@ -1072,10 +1091,10 @@ def offering_delete_view(request, pk):
 
 @login_required
 def billing_overview_view(request):
-    if not _can_write_calendar(request.user):
+    if not _can_access_billing(request.user):
         return HttpResponse("Kein Zugriff.", status=403)
     cal_labels = get_cal_profile_labels()
-    can_manage = _has_shared_editor_access(request.user) or getattr(request.user, "is_staff", False)
+    can_manage = _has_billing_manage_access(request.user) or getattr(request.user, "is_staff", False)
     qs = CalendarEvent.objects.select_related("category", "offering_template").filter(
         Q(offering_template__isnull=False) | Q(allow_registration=True)
     )
@@ -1110,6 +1129,8 @@ def billing_overview_view(request):
         "total_net": total_net,
         "cal_labels": cal_labels,
         "cal_active_tab": "billing",
+        "can_access_offerings": _can_access_offerings(request.user),
+        "can_access_billing": True,
         "year_filter": year_filter,
         "available_years": available_years,
     })
@@ -1212,8 +1233,10 @@ def _build_event_session_rows(ev: CalendarEvent) -> list:
 
 @login_required
 def event_billing_view(request, pk):
+    if not _can_access_billing(request.user):
+        return HttpResponse("Kein Zugriff.", status=403)
     ev = get_object_or_404(CalendarEvent.objects.select_related("category", "offering_template"), pk=pk)
-    can_manage = _has_shared_editor_access(request.user) or ev.user_id == request.user.id
+    can_manage = _has_billing_manage_access(request.user) or ev.user_id == request.user.id
     if not can_manage and ev.instructor_ref not in _user_instructor_refs(request.user):
         return HttpResponse("Kein Zugriff.", status=403)
     summary = get_event_billing_summary(ev)
@@ -1394,8 +1417,10 @@ def event_notify_participants_view(request, pk):
 
 @login_required
 def event_billing_csv_view(request, pk):
+    if not _can_access_billing(request.user):
+        return HttpResponse("Kein Zugriff.", status=403)
     ev = get_object_or_404(CalendarEvent.objects.select_related("category", "offering_template"), pk=pk)
-    can_manage = _has_shared_editor_access(request.user) or ev.user_id == request.user.id
+    can_manage = _has_billing_manage_access(request.user) or ev.user_id == request.user.id
     if not can_manage and ev.instructor_ref not in _user_instructor_refs(request.user):
         return HttpResponse("Kein Zugriff.", status=403)
     summary = get_event_billing_summary(ev)
@@ -1420,8 +1445,10 @@ def event_billing_csv_view(request, pk):
 
 @login_required
 def event_credit_note_pdf_view(request, pk):
+    if not _can_access_billing(request.user):
+        return HttpResponse("Kein Zugriff.", status=403)
     ev = get_object_or_404(CalendarEvent.objects.select_related("category", "offering_template"), pk=pk)
-    can_manage = _has_shared_editor_access(request.user) or ev.user_id == request.user.id
+    can_manage = _has_billing_manage_access(request.user) or ev.user_id == request.user.id
     if not can_manage and ev.instructor_ref not in _user_instructor_refs(request.user):
         return HttpResponse("Kein Zugriff.", status=403)
     summary = get_event_billing_summary(ev)
